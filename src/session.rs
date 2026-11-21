@@ -61,7 +61,7 @@ pub fn signal(app: &App, t: u8, p: Value) -> Result<()> {
         .context("信令队列已满或已关闭")?;
     Ok(())
 }
-pub async fn start(app: &App) -> Result<()> {
+pub async fn start(app: &App, keep_events: bool) -> Result<()> {
     let _g = app.gate.lock().await;
     ensure!(!app.quit.is_cancelled(), "Avatar3D 正在退出");
     ensure!(lock(&app.run).is_none(), "已有会话正在运行");
@@ -100,12 +100,25 @@ pub async fn start(app: &App) -> Result<()> {
     *lock(&app.run) = Some(run.clone());
     lock(&app.seen).clear();
     lock(&app.screen).tone = None;
-    *lock(&app.view) = View {
-        phase: "starting".into(),
-        message: "正在创建云端会话".into(),
-        started: now(),
-        ..View::default()
-    };
+    {
+        let mut view = lock(&app.view);
+        let kept_events = if keep_events {
+            view.events.clone()
+        } else {
+            Default::default()
+        };
+        let bgm_playing = view.bgm_playing;
+        let current_bgm = view.current_bgm.clone();
+        *view = View {
+            phase: "starting".into(),
+            message: "正在创建云端会话".into(),
+            started: now(),
+            events: kept_events,
+            bgm_playing,
+            current_bgm,
+            ..View::default()
+        };
+    }
     let core = app.clone();
     let active = run.clone();
     tokio::spawn(async move {
@@ -131,7 +144,13 @@ pub async fn start(app: &App) -> Result<()> {
         let _ = schedule.await;
         let _ = director.await;
         let _g = core.gate.lock().await;
-        lock(&core.screen).rtc = None;
+        {
+            let mut sc = lock(&core.screen);
+            sc.rtc = None;
+            if sc.song.take().is_some() {
+                core.notify_stage(json!({"event": "song_stop"}));
+            }
+        }
         {
             let mut v = lock(&core.view);
             v.subtitle.clear();
@@ -142,6 +161,7 @@ pub async fn start(app: &App) -> Result<()> {
             v.singing = false;
             v.current_song.clear();
         }
+        core.notify_stage(json!({"event": "bgm_state", "bgm": crate::output::bgm_snapshot(&core)}));
         *lock(&core.run) = None;
     });
     Ok(())

@@ -110,6 +110,11 @@ async function join(id, cred) {
         status = "audio_blocked";
       }
     });
+    instance.on(T.EVENT.REMOTE_AUDIO_AVAILABLE, () => {
+      if (version === generation && trtcAudioMuted) {
+        applyTrtcAudioMute(true);
+      }
+    });
     instance.on(T.EVENT.ERROR, () => {
       if (version === generation) status = "rtc_error";
     });
@@ -130,6 +135,9 @@ async function join(id, cred) {
       autoReceiveVideo: true,
       enableAutoPlayDialog: false,
     });
+    if (version === generation && trtcAudioMuted) {
+      applyTrtcAudioMute(true);
+    }
     if (version === generation && status === "joining") status = "waiting";
   } catch {
     if (version === generation) {
@@ -147,7 +155,7 @@ resume.onclick = async () => {
     await Promise.all(resumes.map((fn) => fn()));
     resumes = [];
     resume.hidden = true;
-    status = "waiting";
+    status = rtc ? "waiting" : "standby";
   } catch {
     status = "audio_blocked";
   }
@@ -255,6 +263,348 @@ const pack = () => ({
   height,
   rtc_supported: rtcSupported,
 });
+let trtcAudioMuted = false;
+function applyTrtcAudioMute(muted) {
+  trtcAudioMuted = muted;
+  if (rtc) {
+    try {
+      rtc.muteRemoteAudio("*", muted);
+    } catch {}
+  }
+  for (const el of picture.querySelectorAll("audio, video")) {
+    try {
+      el.muted = muted;
+    } catch {}
+  }
+}
+
+const clampVol = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 1));
+
+// =========================================================================
+// Hi-Fi Singing Audio Player (Vidu drives lips/actions; Stage outputs stereo)
+// =========================================================================
+let songPlaybackId = "";
+let songPlayer = null;
+let songUrl = "";
+let songPlaying = false;
+let songPreparePromise = null;
+
+function disposeSongPlayer() {
+  if (songPlayer) {
+    songPlayer.pause();
+    songPlayer.onended = null;
+    songPlayer = null;
+  }
+  if (songUrl) {
+    URL.revokeObjectURL(songUrl);
+    songUrl = "";
+  }
+}
+
+function stopSong() {
+  songPlaybackId = "";
+  songPreparePromise = null;
+  songPlaying = false;
+  disposeSongPlayer();
+  applyTrtcAudioMute(false);
+  applyBgmState();
+}
+
+function prepareSong(msg) {
+  if (!stageOwner || !msg?.playback_id || !msg?.track_id) return Promise.resolve();
+  pauseBgmNow();
+  if (songPlaybackId === msg.playback_id && songPreparePromise) {
+    if (songPlayer && msg.volume != null) songPlayer.volume = clampVol(msg.volume);
+    return songPreparePromise;
+  }
+  disposeSongPlayer();
+  songPlaying = false;
+  const pid = msg.playback_id;
+  songPlaybackId = pid;
+  const task = (async () => {
+    try {
+      const r = await fetch("/api/stage/track/" + encodeURIComponent(msg.track_id), {
+        headers: { Authorization: "Bearer " + token },
+      });
+      if (!r.ok) throw Error("song fetch failed");
+      const blob = await r.blob();
+      if (songPlaybackId !== pid) return;
+      songUrl = URL.createObjectURL(blob);
+      const audio = new Audio(songUrl);
+      audio.preload = "auto";
+      audio.volume = clampVol(msg.volume ?? 0.95);
+      audio.onended = () => {
+        if (songPlaybackId === pid) stopSong();
+      };
+      audio.load();
+      songPlayer = audio;
+    } catch {
+      if (songPlaybackId === pid) stopSong();
+    }
+  })();
+  songPreparePromise = task;
+  return task;
+}
+
+async function playSong(msg) {
+  if (!stageOwner || !msg?.playback_id || !msg?.track_id) return;
+  const pid = msg.playback_id;
+  if (songPlaybackId !== pid || !songPlayer) {
+    await prepareSong(msg);
+  }
+  if (songPlaybackId !== pid || !songPlayer) return;
+  songPlaying = true;
+  applyBgmState();
+  applyTrtcAudioMute(true);
+  songPlayer.volume = clampVol(msg.volume ?? songPlayer.volume);
+  if (msg.elapsed_ms > 150) {
+    try {
+      songPlayer.currentTime = msg.elapsed_ms / 1000;
+    } catch {}
+  }
+  try {
+    await songPlayer.play();
+  } catch {
+    resumes.push(() => (songPlayer ? songPlayer.play() : Promise.resolve()));
+    resume.hidden = false;
+    status = "audio_blocked";
+  }
+}
+
+// =========================================================================
+// Background Music (BGM) Player — Never drives Vidu; auto-ducks & auto-pauses
+// =========================================================================
+let bgmState = null;
+let bgmPlayer = null;
+let bgmUrl = "";
+let bgmLoadedTrackId = "";
+let bgmLoadingTrackId = "";
+let bgmLoadSeq = 0;
+let bgmRampTimer = 0;
+let bgmAutoplayBlocked = false;
+
+function pauseBgmNow() {
+  clearInterval(bgmRampTimer);
+  if (bgmPlayer && !bgmPlayer.paused) {
+    bgmPlayer.pause();
+  }
+}
+
+function rampBgmVolume(target, ms = 240) {
+  if (!bgmPlayer) return;
+  clearInterval(bgmRampTimer);
+  const start = bgmPlayer.volume;
+  const dest = clampVol(target);
+  if (Math.abs(dest - start) < 0.01) {
+    bgmPlayer.volume = dest;
+    return;
+  }
+  const steps = Math.max(1, Math.round(ms / 25));
+  let step = 0;
+  bgmRampTimer = setInterval(() => {
+    if (!bgmPlayer) {
+      clearInterval(bgmRampTimer);
+      return;
+    }
+    step++;
+    if (step >= steps) {
+      bgmPlayer.volume = dest;
+      clearInterval(bgmRampTimer);
+    } else {
+      bgmPlayer.volume = clampVol(start + ((dest - start) * step) / steps);
+    }
+  }, 25);
+}
+
+function stopBgm() {
+  bgmLoadSeq++;
+  bgmLoadingTrackId = "";
+  bgmAutoplayBlocked = false;
+  clearInterval(bgmRampTimer);
+  if (bgmPlayer) {
+    bgmPlayer.pause();
+    bgmPlayer.onended = null;
+    bgmPlayer = null;
+  }
+  if (bgmUrl) {
+    URL.revokeObjectURL(bgmUrl);
+    bgmUrl = "";
+  }
+  bgmLoadedTrackId = "";
+}
+
+function queueBgmResume() {
+  if (bgmAutoplayBlocked) return;
+  bgmAutoplayBlocked = true;
+  resumes.push(() => {
+    bgmAutoplayBlocked = false;
+    if (!bgmPlayer || !bgmState?.enabled || bgmState?.paused_for_song || songPlaying || songPlaybackId) {
+      return Promise.resolve();
+    }
+    return bgmPlayer.play();
+  });
+  resume.hidden = false;
+  status = "audio_blocked";
+}
+
+async function applyBgmState(nextState) {
+  if (nextState) bgmState = nextState;
+  const st = bgmState;
+  if (!stageOwner || !st || !st.enabled || !st.track_id) {
+    stopBgm();
+    return;
+  }
+  const pausedForSong = !!st.paused_for_song || songPlaying || !!songPlaybackId;
+  if (pausedForSong) {
+    pauseBgmNow();
+    return;
+  }
+  const baseVol = clampVol(st.volume ?? 0.25);
+  const duckRatio = clampVol(st.duck_percent ?? 0.3);
+  const targetVol = st.ducked ? baseVol * duckRatio : baseVol;
+
+  if (bgmLoadedTrackId === st.track_id && bgmPlayer) {
+    if (bgmPlayer.paused && !bgmAutoplayBlocked) {
+      bgmPlayer.volume = Math.min(bgmPlayer.volume, targetVol);
+      try {
+        await bgmPlayer.play();
+      } catch {
+        queueBgmResume();
+        return;
+      }
+    }
+    if (!bgmPlayer.paused) {
+      rampBgmVolume(targetVol, st.ducked ? 180 : 320);
+    }
+    return;
+  }
+
+  // Already fetching this exact track — do NOT abort & restart on 1s heartbeat polls!
+  if (bgmLoadingTrackId === st.track_id) {
+    return;
+  }
+
+  const seq = ++bgmLoadSeq;
+  const trackId = st.track_id;
+  bgmLoadingTrackId = trackId;
+  bgmAutoplayBlocked = false;
+  clearInterval(bgmRampTimer);
+  if (bgmPlayer) {
+    bgmPlayer.pause();
+    bgmPlayer.onended = null;
+    bgmPlayer = null;
+  }
+  if (bgmUrl) {
+    URL.revokeObjectURL(bgmUrl);
+    bgmUrl = "";
+  }
+  bgmLoadedTrackId = "";
+  try {
+    const r = await fetch("/api/stage/bgm/" + encodeURIComponent(trackId), {
+      headers: { Authorization: "Bearer " + token },
+    });
+    if (!r.ok) return;
+    const blob = await r.blob();
+    if (seq !== bgmLoadSeq || !stageOwner) return;
+    bgmUrl = URL.createObjectURL(blob);
+    const audio = new Audio(bgmUrl);
+    audio.preload = "auto";
+    audio.volume = targetVol;
+    audio.onended = () => {
+      if (seq !== bgmLoadSeq) return;
+      bgmLoadedTrackId = "";
+      fetch("/api/stage/bgm/next", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ client }),
+      }).catch(() => {});
+    };
+    bgmPlayer = audio;
+    bgmLoadedTrackId = trackId;
+    if (bgmState?.paused_for_song || songPlaying || songPlaybackId || !bgmState?.enabled) {
+      return;
+    }
+    try {
+      await audio.play();
+    } catch {
+      queueBgmResume();
+    }
+  } catch {
+    // Retry on next poll if transient fetch error occurred.
+  } finally {
+    if (bgmLoadingTrackId === trackId) bgmLoadingTrackId = "";
+  }
+}
+
+// =========================================================================
+// Low-Latency SSE Event Stream for Sub-5ms Song & Ducking Triggers
+// =========================================================================
+let sseAbort = null;
+function handleStageEvent(msg) {
+  if (!stageOwner || !msg?.event) return;
+  switch (msg.event) {
+    case "song_prepare":
+      prepareSong(msg);
+      break;
+    case "song_play":
+      playSong(msg);
+      break;
+    case "song_stop":
+      stopSong();
+      break;
+    case "song_volume":
+      if (songPlayer && msg.volume != null) songPlayer.volume = clampVol(msg.volume);
+      break;
+    case "bgm_state":
+      if (msg.bgm) applyBgmState(msg.bgm);
+      break;
+  }
+}
+
+async function connectEvents() {
+  if (!token) return;
+  if (sseAbort) {
+    sseAbort.abort();
+    sseAbort = null;
+  }
+  const ctrl = new AbortController();
+  sseAbort = ctrl;
+  while (!ctrl.signal.aborted && token) {
+    try {
+      const r = await fetch("/api/stage/events", {
+        headers: { Authorization: "Bearer " + token },
+        signal: ctrl.signal,
+        cache: "no-store",
+      });
+      if (!r.ok || !r.body) throw Error("sse failed");
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      while (!ctrl.signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) !== -1) {
+          const block = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          for (const line of block.split("\n")) {
+            if (line.startsWith("data:")) {
+              try {
+                handleStageEvent(JSON.parse(line.slice(5).trim()));
+              } catch {}
+            }
+          }
+        }
+      }
+    } catch {
+      if (ctrl.signal.aborted) break;
+    }
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+}
+
+let serverBootId = "";
 async function poll() {
   if (!token || pollBusy) return;
   pollBusy = true;
@@ -267,14 +617,31 @@ async function poll() {
     });
     if (!r.ok) throw Error("output rejected");
     const v = await r.json();
+    if (v.boot_id) {
+      if (serverBootId && serverBootId !== v.boot_id) {
+        location.reload();
+        return;
+      }
+      serverBootId = v.boot_id;
+    }
     stageOwner = v.owner;
     if (!v.owner) {
       stopCheck();
+      stopSong();
+      stopBgm();
       if (rtc || desired) await leave();
       document.title = "Avatar3D · 舞台已被占用";
       return;
     }
     document.title = "Avatar3D · 舞台输出";
+    if (v.bgm) applyBgmState(v.bgm);
+    if (!v.song && (songPlaying || songPlaybackId)) {
+      stopSong();
+    } else if (v.song && v.song.state === "play" && (!songPlaying || songPlaybackId !== v.song.playback_id)) {
+      playSong(v.song);
+    } else if (v.song && v.song.state === "prepare" && songPlaybackId !== v.song.playback_id) {
+      prepareSong(v.song);
+    }
     if (!v.rtc || !v.live_id) {
       if (rtc || desired) await leave();
       probeReceiver();
@@ -307,6 +674,7 @@ function startPolling() {
   document.body.classList.remove("no-token");
   poll();
   if (!pollTimer) pollTimer = setInterval(poll, 1000);
+  connectEvents();
 }
 if (token) {
   startPolling();

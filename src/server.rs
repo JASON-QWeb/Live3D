@@ -34,7 +34,8 @@ async fn guard(State((app, port)): State<(App, u16)>, req: Request, next: Next) 
         let secret = match path {
             p if p == "/api/output"
                 || p.starts_with("/api/frame/")
-                || p.starts_with("/api/test-audio/") =>
+                || p.starts_with("/api/test-audio/")
+                || p.starts_with("/api/stage/") =>
             {
                 &app.tokens.stage
             }

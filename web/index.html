@@ -275,13 +275,22 @@
               </div>
 
               <div class="tool-block">
-                <div class="tool-label">授权曲库与点播</div>
+                <div class="tool-head">
+                  <div class="tool-label">小柔演唱曲库（顺序轮播 / 点播）</div>
+                  <span id="trackCount" class="meta mono"></span>
+                </div>
                 <div class="tool-row">
                   <label class="file-button">
-                    导入授权音频
-                    <input type="file" id="addTrack" accept="audio/*,video/mp4" multiple />
+                    导入歌曲（多选）
+                    <input type="file" id="addTrack" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,video/mp4" multiple />
                   </label>
-                  <select id="tracks" aria-label="曲库" class="track-select"></select>
+                  <label class="file-button">
+                    导入文件夹
+                    <input type="file" id="addTrackFolder" webkitdirectory multiple />
+                  </label>
+                </div>
+                <div class="tool-row">
+                  <select id="tracks" aria-label="演唱曲库" class="track-select"></select>
                 </div>
                 <div id="trackImportStatus" class="meta" role="status" hidden></div>
                 <details id="trackImportErrors" class="sub-disclosure" hidden>
@@ -289,8 +298,59 @@
                   <ul></ul>
                 </details>
                 <div class="tool-row">
-                  <button id="playTrack">点播</button>
-                  <button id="removeTrack">移除曲目</button>
+                  <button id="playTrack">演唱此首</button>
+                  <button id="previewTrack">试听</button>
+                  <button id="removeTrack">移除</button>
+                  <button id="clearTracks">清空</button>
+                </div>
+                <div class="mixer-row">
+                  <label class="mixer-item">
+                    <span>演唱音量 <b id="liveSongVolVal" class="mono">95%</b></span>
+                    <input id="liveSongVol" type="range" min="0" max="100" value="95" />
+                  </label>
+                  <label class="mixer-item mixer-sync">
+                    <span>同步偏移(ms)</span>
+                    <input id="liveSyncOffset" type="number" min="0" max="4000" step="50" value="800" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="tool-block">
+                <div class="tool-head">
+                  <div class="tool-label">背景音乐 BGM（不驱口型 · 说话自动压低）</div>
+                  <span id="bgmCount" class="meta mono"></span>
+                </div>
+                <div class="tool-row">
+                  <label class="file-button">
+                    导入 BGM
+                    <input type="file" id="addBgm" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus" multiple />
+                  </label>
+                  <label class="file-button">
+                    导入文件夹
+                    <input type="file" id="addBgmFolder" webkitdirectory multiple />
+                  </label>
+                </div>
+                <div class="tool-row">
+                  <select id="bgmTracks" aria-label="背景音乐列表" class="track-select"></select>
+                </div>
+                <div id="bgmImportStatus" class="meta" role="status" hidden></div>
+                <details id="bgmImportErrors" class="sub-disclosure" hidden>
+                  <summary>查看导入失败的文件</summary>
+                  <ul></ul>
+                </details>
+                <div class="tool-row">
+                  <button id="toggleBgm">开启 BGM</button>
+                  <button id="nextBgm">下一首</button>
+                  <button id="previewBgm">试听</button>
+                  <button id="removeBgm">移除</button>
+                  <button id="clearBgm">清空</button>
+                </div>
+                <div class="mixer-row">
+                  <label class="mixer-item">
+                    <span>BGM 音量 <b id="liveBgmVolVal" class="mono">25%</b></span>
+                    <input id="liveBgmVol" type="range" min="0" max="100" value="25" />
+                  </label>
+                  <span id="bgmNow" class="meta bgm-now">未播放</span>
                 </div>
               </div>
             </div>
@@ -305,7 +365,10 @@
                   <path d="M6.8 9.1l1.5 1.5 3-3.2" />
                 </svg>
               </span>
-              <span class="status-chip mono" id="eventCount"></span>
+              <div class="row event-top-actions">
+                <span class="status-chip mono" id="eventCount"></span>
+                <button type="button" id="clearEvents" class="btn-chip" hidden>清空动态</button>
+              </div>
             </div>
             <h2 id="h-events">直播动态</h2>
             <p class="cell-desc">按时间顺序记录弹幕回复、动作指令与连线事件。</p>
@@ -344,6 +407,10 @@
                   <button type="button" id="simGiftBtn">模拟送礼</button>
                   <button type="button" id="simChat">模拟弹幕</button>
                 </div>
+                <label class="check sim-keep">
+                  <input type="checkbox" id="keepEventsOnStart" />
+                  <span>开播时保留历史动态（未开播的事件不会触发播报）</span>
+                </label>
               </div>
             </details>
           </section>
@@ -528,6 +595,29 @@
                 <label>
                   <span>定时唱歌间隔（秒）</span>
                   <input type="number" name="auto_sing_gap" min="15" max="3600" required />
+                </label>
+              </div>
+              <div class="pair">
+                <label>
+                  <span>演唱出声方式</span>
+                  <select name="song_audio_mode">
+                    <option value="stage">舞台高音质原声（Vidu 驱动作 + 本地直出）</option>
+                    <option value="vidu">Vidu 原声直推（24kHz 单声道，免调偏移）</option>
+                  </select>
+                </label>
+                <label>
+                  <span>说话时 BGM 压低比例（%）</span>
+                  <input type="number" name="bgm_duck_percent" min="0" max="100" required />
+                </label>
+              </div>
+              <div class="pair">
+                <label>
+                  <span>演唱音画同步偏移（毫秒）</span>
+                  <input type="number" name="song_sync_offset_ms" min="0" max="4000" step="50" required />
+                </label>
+                <label>
+                  <span>演唱音量（%）</span>
+                  <input type="number" name="song_volume" min="0" max="100" required />
                 </label>
               </div>
 

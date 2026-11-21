@@ -117,6 +117,11 @@ pub struct Settings {
     pub post_sing_action: String,
     pub post_sing_action_en: String,
     pub utterance_gap: u32,
+    pub song_audio_mode: String,
+    pub song_sync_offset_ms: u32,
+    pub song_volume: u32,
+    pub bgm_volume: u32,
+    pub bgm_duck_percent: u32,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -164,6 +169,11 @@ impl Default for Settings {
             post_sing_action_en: "Finish singing and smile warmly at the camera, relaxed and natural"
                 .into(),
             utterance_gap: 3,
+            song_audio_mode: "stage".into(),
+            song_sync_offset_ms: 800,
+            song_volume: 95,
+            bgm_volume: 25,
+            bgm_duck_percent: 30,
         }
     }
 }
@@ -299,6 +309,18 @@ impl Settings {
         ensure!(
             (1..=60).contains(&self.utterance_gap),
             "行为间隔须在 1 至 60 秒内"
+        );
+        ensure!(
+            ["stage", "vidu"].contains(&self.song_audio_mode.as_str()),
+            "演唱出声方式仅支持 stage 或 vidu"
+        );
+        ensure!(
+            self.song_sync_offset_ms <= 4000,
+            "音画同步偏移须在 0 至 4000 毫秒内"
+        );
+        ensure!(
+            self.song_volume <= 100 && self.bgm_volume <= 100 && self.bgm_duck_percent <= 100,
+            "音量与闪避比例须在 0 至 100 之间"
         );
         for phrases in [&self.welcome_phrases, &self.welcome_phrases_en] {
             ensure!(
@@ -645,6 +667,11 @@ mod tests {
             "post_sing_action",
             "post_sing_action_en",
             "utterance_gap",
+            "song_audio_mode",
+            "song_sync_offset_ms",
+            "song_volume",
+            "bgm_volume",
+            "bgm_duck_percent",
         ] {
             fields.remove(name);
         }
@@ -659,6 +686,11 @@ mod tests {
         assert!(loaded.auto_thank_gifts);
         assert!(loaded.auto_sing);
         assert_eq!(loaded.utterance_gap, 3);
+        assert_eq!(loaded.song_audio_mode, "stage");
+        assert_eq!(loaded.song_sync_offset_ms, 800);
+        assert_eq!(loaded.song_volume, 95);
+        assert_eq!(loaded.bgm_volume, 25);
+        assert_eq!(loaded.bgm_duck_percent, 30);
         assert!(loaded.qa_reference.contains("欢迎某某"));
         assert_eq!(loaded.welcome_phrases.len(), 3);
     }

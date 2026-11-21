@@ -260,7 +260,12 @@ pub async fn sentences(
         .json(&json!({"model":c.llm_model,"messages":messages,"stream":true,"max_tokens":max_tokens}))
         .send()
         .await
-        .map_err(|e| e.without_url())?;
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "无法连接语言模型（请先在「设置」点击「启动本机对话」）：{}",
+                e.without_url()
+            )
+        })?;
     let mut stream = checked(resp, "语言模型").await?.bytes_stream();
     let mut buf = Vec::new();
     let mut pending = String::new();

@@ -49,14 +49,28 @@ fn busy(app: &App) -> Result<()> {
     Ok(())
 }
 pub fn routes() -> Router<App> {
-    Router::new()
-        .route("/api/status", get(status))
-        .route("/api/obs", post(obs_setup))
-        .route("/api/tracks", get(tracks))
+    let audio_uploads = Router::new()
         .route(
             "/api/tracks/{value}",
             put(track_add).delete(track_remove).post(track_play),
         )
+        .route("/api/bgm/{value}", put(bgm_add).delete(bgm_remove))
+        .route("/api/media", post(media))
+        .layer(DefaultBodyLimit::max(audio::MAX_AUDIO));
+
+    Router::new()
+        .route("/api/status", get(status))
+        .route("/api/obs", post(obs_setup))
+        .route("/api/tracks", get(tracks).delete(tracks_clear))
+        .route("/api/tracks/{id}/audio", get(track_audio))
+        .route("/api/bgm", get(bgm_tracks).delete(bgm_clear))
+        .route("/api/bgm/{id}/audio", get(bgm_audio))
+        .route("/api/bgm/control", post(bgm_control))
+        .route("/api/audio-live", post(audio_live))
+        .route("/api/stage/events", get(stage_events))
+        .route("/api/stage/track/{id}", get(track_audio))
+        .route("/api/stage/bgm/{id}", get(bgm_audio))
+        .route("/api/stage/bgm/next", post(stage_bgm_next))
         .route("/api/choreo", post(choreo))
         .route("/api/soundcheck", post(soundcheck))
         .route("/api/test-audio/{id}", get(test_audio))
@@ -71,7 +85,6 @@ pub fn routes() -> Router<App> {
         .route("/api/command", post(command))
         .route("/api/reference/{kind}", post(reference))
         .route("/api/preview", post(preview))
-        .route("/api/media", post(media))
         .route("/api/voice", get(voice).post(launch))
         .route("/api/model", get(model_status).post(model_start))
         .route("/api/preview/reply", post(reply_preview))
@@ -81,10 +94,12 @@ pub fn routes() -> Router<App> {
         .route("/api/output", post(screen))
         .route("/api/ingest", post(incoming))
         .route("/api/simulate", post(simulate))
+        .route("/api/events/clear", post(events_clear))
         .route("/api/recording", post(recording))
         .route("/api/quit", post(quit))
         .route("/sdk/trtc.js", get(sdk))
         .layer(DefaultBodyLimit::max(32 * 1024 * 1024))
+        .merge(audio_uploads)
 }
 async fn status(State(app): S) -> Json<Value> {
     Json(json!(app.snapshot()))
@@ -145,8 +160,19 @@ async fn avatar(State(app): S) -> Api<Response> {
     let b = std::fs::read(p).context("无法读取角色图")?;
     Ok(asset(config::image_type(&b)?, b))
 }
-async fn start(State(app): S) -> Api<Json<Value>> {
-    session::start(&app).await?;
+#[derive(Deserialize, Default)]
+struct StartReq {
+    #[serde(default)]
+    keep_events: bool,
+}
+async fn start(State(app): S, q: Option<Json<StartReq>>) -> Api<Json<Value>> {
+    let keep_events = q.map(|Json(v)| v.keep_events).unwrap_or(false);
+    session::start(&app, keep_events).await?;
+    Ok(ok())
+}
+async fn events_clear(State(app): S) -> Api<Json<Value>> {
+    lock(&app.view).events.clear();
+    lock(&app.seen).clear();
     Ok(ok())
 }
 async fn stop(State(app): S) -> Api<Json<Value>> {
@@ -397,15 +423,33 @@ async fn test_receipt(
     Ok(ok())
 }
 
+fn ext_header(h: &axum::http::HeaderMap) -> Option<&str> {
+    h.get("x-file-ext")
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && s.len() <= 16)
+}
+
 async fn tracks(State(app): S) -> Api<Json<Value>> {
     Ok(Json(json!(crate::library::list(&app)?)))
 }
-async fn track_add(State(app): S, Path(title): Path<String>, b: Bytes) -> Api<Json<Value>> {
-    Ok(Json(json!(crate::library::add(&app, &title, &b).await?)))
+async fn track_add(
+    State(app): S,
+    h: axum::http::HeaderMap,
+    Path(title): Path<String>,
+    b: Bytes,
+) -> Api<Json<Value>> {
+    Ok(Json(json!(
+        crate::library::add(&app, &title, ext_header(&h), &b).await?
+    )))
 }
 async fn track_remove(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Json<Value>> {
     crate::library::remove(&app, id).await?;
     Ok(ok())
+}
+async fn tracks_clear(State(app): S) -> Api<Json<Value>> {
+    let removed = crate::library::clear(&app).await?;
+    Ok(Json(json!({"ok": true, "removed": removed})))
 }
 async fn track_play(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Json<Value>> {
     if !crate::library::list(&app)?.iter().any(|t| t.id == id) {
@@ -414,6 +458,218 @@ async fn track_play(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Json<Value
     speech::enqueue(&app, Job::Track(id))?;
     Ok(ok())
 }
+async fn track_audio(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Response> {
+    let (mime, bytes) = crate::library::playback_audio(&app, id).await?;
+    Ok(asset(mime, bytes))
+}
+
+async fn bgm_tracks(State(app): S) -> Api<Json<Value>> {
+    Ok(Json(json!(crate::library::bgm_list(&app)?)))
+}
+async fn bgm_add(
+    State(app): S,
+    h: axum::http::HeaderMap,
+    Path(title): Path<String>,
+    b: Bytes,
+) -> Api<Json<Value>> {
+    let item = crate::library::bgm_add(&app, &title, ext_header(&h), &b).await?;
+    app.notify_stage(json!({"event": "bgm_state", "bgm": output::bgm_snapshot(&app)}));
+    Ok(Json(json!(item)))
+}
+async fn bgm_remove(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Json<Value>> {
+    crate::library::bgm_remove(&app, id).await?;
+    {
+        let mut s = lock(&app.screen);
+        s.bgm_revision = s.bgm_revision.wrapping_add(1);
+    }
+    app.notify_stage(json!({"event": "bgm_state", "bgm": output::bgm_snapshot(&app)}));
+    Ok(ok())
+}
+async fn bgm_clear(State(app): S) -> Api<Json<Value>> {
+    let removed = crate::library::bgm_clear(&app).await?;
+    {
+        let mut s = lock(&app.screen);
+        s.bgm_enabled = false;
+        s.bgm_index = 0;
+        s.bgm_revision = s.bgm_revision.wrapping_add(1);
+    }
+    app.notify_stage(json!({"event": "bgm_state", "bgm": output::bgm_snapshot(&app)}));
+    Ok(Json(json!({"ok": true, "removed": removed})))
+}
+async fn bgm_audio(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Response> {
+    let (mime, bytes) = crate::library::bgm_audio(&app, id).await?;
+    Ok(asset(mime, bytes))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BgmControl {
+    action: String,
+    #[serde(default)]
+    id: Option<uuid::Uuid>,
+}
+async fn bgm_control(State(app): S, Json(q): Json<BgmControl>) -> Api<Json<Value>> {
+    let items = crate::library::bgm_list(&app)?;
+    match q.action.as_str() {
+        "toggle" => {
+            let mut s = lock(&app.screen);
+            if !s.bgm_enabled {
+                if items.is_empty() {
+                    return Err(anyhow::anyhow!("请先导入背景音乐").into());
+                }
+                s.bgm_enabled = true;
+            } else {
+                s.bgm_enabled = false;
+            }
+            s.bgm_revision = s.bgm_revision.wrapping_add(1);
+        }
+        "start" => {
+            if items.is_empty() {
+                return Err(anyhow::anyhow!("请先导入背景音乐").into());
+            }
+            let mut s = lock(&app.screen);
+            s.bgm_enabled = true;
+            s.bgm_revision = s.bgm_revision.wrapping_add(1);
+        }
+        "stop" => {
+            let mut s = lock(&app.screen);
+            s.bgm_enabled = false;
+            s.bgm_revision = s.bgm_revision.wrapping_add(1);
+        }
+        "next" => {
+            if items.is_empty() {
+                return Err(anyhow::anyhow!("背景音乐列表为空").into());
+            }
+            let mut s = lock(&app.screen);
+            s.bgm_index = (s.bgm_index + 1) % items.len();
+            s.bgm_revision = s.bgm_revision.wrapping_add(1);
+        }
+        "select" => {
+            let id = q.id.context("请选择要播放的背景音乐")?;
+            let pos = items
+                .iter()
+                .position(|t| t.id == id)
+                .context("找不到该背景音乐")?;
+            let mut s = lock(&app.screen);
+            s.bgm_index = pos;
+            s.bgm_enabled = true;
+            s.bgm_revision = s.bgm_revision.wrapping_add(1);
+        }
+        _ => return Err(anyhow::anyhow!("未知背景音乐操作").into()),
+    }
+    let bgm = output::bgm_snapshot(&app);
+    app.notify_stage(json!({"event": "bgm_state", "bgm": bgm}));
+    Ok(Json(json!({"ok": true, "bgm": bgm})))
+}
+
+#[derive(Deserialize)]
+struct StageClient {
+    client: String,
+}
+async fn stage_bgm_next(State(app): S, Json(q): Json<StageClient>) -> Api<Json<Value>> {
+    let items = crate::library::bgm_list(&app)?;
+    let is_owner = {
+        let mut s = lock(&app.screen);
+        if s.lease != q.client {
+            false
+        } else {
+            if !items.is_empty() && s.bgm_enabled {
+                s.bgm_index = (s.bgm_index + 1) % items.len();
+                s.bgm_revision = s.bgm_revision.wrapping_add(1);
+            }
+            true
+        }
+    };
+    if !is_owner {
+        return Ok(Json(json!({"ok": false})));
+    }
+    let bgm = output::bgm_snapshot(&app);
+    app.notify_stage(json!({"event": "bgm_state", "bgm": bgm}));
+    Ok(Json(json!({"ok": true, "bgm": bgm})))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AudioLiveUpdate {
+    #[serde(default)]
+    song_audio_mode: Option<String>,
+    #[serde(default)]
+    song_sync_offset_ms: Option<u32>,
+    #[serde(default)]
+    song_volume: Option<u32>,
+    #[serde(default)]
+    bgm_volume: Option<u32>,
+    #[serde(default)]
+    bgm_duck_percent: Option<u32>,
+}
+async fn audio_live(State(app): S, Json(q): Json<AudioLiveUpdate>) -> Api<Json<Value>> {
+    let mut cfg = app.config();
+    if let Some(m) = q.song_audio_mode {
+        cfg.song_audio_mode = m;
+    }
+    if let Some(ms) = q.song_sync_offset_ms {
+        cfg.song_sync_offset_ms = ms;
+    }
+    if let Some(v) = q.song_volume {
+        cfg.song_volume = v;
+    }
+    if let Some(v) = q.bgm_volume {
+        cfg.bgm_volume = v;
+    }
+    if let Some(v) = q.bgm_duck_percent {
+        cfg.bgm_duck_percent = v;
+    }
+    cfg.validate()?;
+    let song_vol = cfg.song_volume as f32 / 100.0;
+    config::write_json(&app.dir.join("settings.json"), &cfg)?;
+    *lock(&app.conf) = cfg;
+    {
+        if let Some(ref mut s) = lock(&app.screen).song {
+            s.volume = song_vol;
+        }
+    }
+    app.notify_stage(json!({"event": "song_volume", "volume": song_vol}));
+    app.notify_stage(json!({"event": "bgm_state", "bgm": output::bgm_snapshot(&app)}));
+    Ok(ok())
+}
+
+async fn stage_events(State(app): S) -> Response {
+    let rx = app.stage_tx.subscribe();
+    let initial = json!({"event": "bgm_state", "bgm": output::bgm_snapshot(&app)});
+    let stream = futures_util::stream::unfold(
+        (Some(initial), rx),
+        |(mut first, mut rx)| async move {
+            if let Some(init) = first.take() {
+                let chunk = Bytes::from(format!("data: {init}\n\n"));
+                return Some((Ok::<_, std::convert::Infallible>(chunk), (None, rx)));
+            }
+            loop {
+                match tokio::time::timeout(std::time::Duration::from_secs(15), rx.recv()).await {
+                    Ok(Ok(val)) => {
+                        let chunk = Bytes::from(format!("data: {val}\n\n"));
+                        return Some((Ok(chunk), (None, rx)));
+                    }
+                    Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => continue,
+                    Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => return None,
+                    Err(_) => {
+                        return Some((Ok(Bytes::from_static(b": ping\n\n")), (None, rx)));
+                    }
+                }
+            }
+        },
+    );
+    let mut r = Response::new(axum::body::Body::from_stream(stream));
+    r.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/event-stream; charset=utf-8"),
+    );
+    r.headers_mut().insert(
+        header::HeaderName::from_static("x-accel-buffering"),
+        HeaderValue::from_static("no"),
+    );
+    r
+}
+
 #[derive(Deserialize)]
 struct Choreo {
     on: bool,

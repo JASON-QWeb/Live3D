@@ -204,7 +204,7 @@ pub async fn worker(app: App, run: Arc<Run>) {
                     continue;
                 }
 
-                // Priority 1: Scheduled auto-singing
+                // Priority 1: Scheduled sequential auto-singing
                 if cfg.auto_sing {
                     let last_song = run.last_song_end_ms.load(Ordering::Relaxed);
                     let sing_gap_ms = cfg.auto_sing_gap as u64 * 1000;
@@ -212,14 +212,14 @@ pub async fn worker(app: App, run: Arc<Run>) {
                         if let Ok(tracks) = crate::library::list(&app)
                             && !tracks.is_empty()
                         {
-                            let idx = run.next_track_index.fetch_add(1, Ordering::Relaxed)
-                                % tracks.len();
+                            let idx =
+                                run.next_track_index.load(Ordering::Relaxed) % tracks.len();
                             let track = &tracks[idx];
                             run.last_song_end_ms.store(current, Ordering::Relaxed);
                             if speech::enqueue_in(&app, &run, Job::Track(track.id), false).is_ok() {
                                 app.event(
                                     "自动唱歌",
-                                    format!("定时排入曲目《{}》", track.title),
+                                    format!("定时顺序排入曲目《{}》", track.title),
                                 );
                                 continue;
                             }

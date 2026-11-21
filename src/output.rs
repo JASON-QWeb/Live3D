@@ -15,6 +15,47 @@ pub struct Report {
     pub height: Option<u64>,
     pub rtc_supported: Option<bool>,
 }
+pub fn bgm_snapshot(app: &App) -> Value {
+    let cfg = app.config();
+    let items = crate::library::bgm_list(app).unwrap_or_default();
+    let (enabled, index, revision, singing, voice_busy) = {
+        let s = lock(&app.screen);
+        let v = lock(&app.view);
+        (
+            s.bgm_enabled && !items.is_empty(),
+            if items.is_empty() {
+                0
+            } else {
+                s.bgm_index % items.len()
+            },
+            s.bgm_revision,
+            v.singing,
+            v.voice_busy,
+        )
+    };
+    let current = items.get(index);
+    {
+        let mut v = lock(&app.view);
+        v.bgm_playing = enabled && !singing;
+        v.current_bgm = if enabled {
+            current.map(|t| t.title.clone()).unwrap_or_default()
+        } else {
+            String::new()
+        };
+    }
+    json!({
+        "enabled": enabled,
+        "paused_for_song": singing,
+        "ducked": voice_busy && !singing,
+        "volume": cfg.bgm_volume as f32 / 100.0,
+        "duck_percent": cfg.bgm_duck_percent as f32 / 100.0,
+        "revision": revision,
+        "index": index,
+        "track_id": current.map(|t| t.id.to_string()),
+        "title": current.map(|t| t.title.as_str()).unwrap_or(""),
+        "queue": items.iter().map(|t| json!({"id": t.id.to_string(), "title": t.title})).collect::<Vec<_>>(),
+    })
+}
 pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
     ensure!(
         q.client.len() >= 16 && q.client.len() <= 80,
@@ -37,7 +78,7 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
         _ => anyhow::bail!("输出端状态无效"),
     };
     let time = now();
-    let (rtc, check) = {
+    let (rtc, check, song) = {
         let mut s = lock(&app.screen);
         if s.lease != q.client && time.saturating_sub(s.seen) < 10_000 {
             return Ok(json!({"owner":false}));
@@ -55,26 +96,55 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
                 .as_ref()
                 .filter(|t| t.until >= time && !t.played && s.rtc.is_none())
                 .map(|t| t.id.clone()),
+            s.song.clone(),
         )
     };
-    let subtitles = app.config().subtitles;
-    let mut v = lock(&app.view);
-    let current = q.live_id.as_deref() == Some(v.live_id.as_str()) && !v.live_id.is_empty();
-    v.output = status.into();
-    if q.status == "playing" && current && q.width.unwrap_or(0) > 0 {
-        if v.metrics.first_frame_ms.is_none() {
-            v.metrics.first_frame_ms = Some(time.saturating_sub(v.started));
+    let cfg = app.config();
+    let subtitles = cfg.subtitles;
+    let (live_id, phase, text) = {
+        let mut v = lock(&app.view);
+        let current = q.live_id.as_deref() == Some(v.live_id.as_str()) && !v.live_id.is_empty();
+        v.output = status.into();
+        if q.status == "playing" && current && q.width.unwrap_or(0) > 0 {
+            if v.metrics.first_frame_ms.is_none() {
+                v.metrics.first_frame_ms = Some(time.saturating_sub(v.started));
+            }
+            v.metrics.output_width = q.width;
+            v.metrics.output_height = q.height;
+            v.metrics.output_fps = q.fps.filter(|n| n.is_finite() && (0.0..=240.0).contains(n));
         }
-        v.metrics.output_width = q.width;
-        v.metrics.output_height = q.height;
-        v.metrics.output_fps = q.fps.filter(|n| n.is_finite() && (0.0..=240.0).contains(n));
-    }
-    let text = if subtitles && time < v.subtitle_until {
-        v.subtitle.as_str()
-    } else {
-        ""
+        let text = if subtitles && time < v.subtitle_until {
+            v.subtitle.clone()
+        } else {
+            String::new()
+        };
+        (v.live_id.clone(), v.phase.clone(), text)
     };
-    Ok(
-        json!({"owner":true,"live_id":v.live_id,"check":check,"rtc":rtc,"subtitle":text,"phase":v.phase}),
-    )
+    let song_json = song.map(|s| {
+        let elapsed_ms = if s.state == "play" && s.started_at > 0 {
+            time.saturating_sub(s.started_at)
+        } else {
+            0
+        };
+        json!({
+            "playback_id": s.playback_id,
+            "track_id": s.track_id,
+            "title": s.title,
+            "state": s.state,
+            "elapsed_ms": elapsed_ms,
+            "volume": cfg.song_volume as f32 / 100.0,
+        })
+    });
+    let bgm = bgm_snapshot(app);
+    Ok(json!({
+        "owner": true,
+        "boot_id": app.boot_id,
+        "live_id": live_id,
+        "check": check,
+        "rtc": rtc,
+        "subtitle": text,
+        "phase": phase,
+        "song": song_json,
+        "bgm": bgm,
+    }))
 }

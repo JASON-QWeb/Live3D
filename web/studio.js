@@ -119,6 +119,7 @@ function paintEvents(v) {
   list.dataset.stamp = stamp;
   list.replaceChildren();
   el("eventCount").textContent = v.events.length ? v.events.length + " 条" : "";
+  if (el("clearEvents")) el("clearEvents").hidden = !v.events.length;
   if (!v.events.length) {
     list.append(makeEmptyEvents());
     return;
@@ -152,6 +153,12 @@ function paint(v) {
   el("choreo").disabled = !live || !configuration?.settings.actions.length;
   el("choreo").textContent = v.choreo ? "暂停动作编排" : "开始动作编排";
   el("playTrack").disabled = !live || !el("tracks").value;
+  el("toggleBgm").textContent = v.bgm_playing || v.current_bgm ? "暂停 BGM" : "开启 BGM";
+  el("bgmNow").textContent = v.current_bgm
+    ? v.singing
+      ? "唱歌已自动暂停 · " + v.current_bgm
+      : "舞台播放中 · " + v.current_bgm
+    : "未播放";
   el("soundcheck").disabled = !!busy() || !v.output;
   el("message").textContent = v.message;
   el("outputState").textContent = v.output || "舞台未打开";
@@ -231,8 +238,25 @@ async function tick() {
   }
 }
 
+function syncLiveAudioControls() {
+  const s = configuration?.settings;
+  if (!s) return;
+  if (el("liveSongVol")) {
+    el("liveSongVol").value = s.song_volume ?? 95;
+    el("liveSongVolVal").textContent = (s.song_volume ?? 95) + "%";
+  }
+  if (el("liveSyncOffset")) {
+    el("liveSyncOffset").value = s.song_sync_offset_ms ?? 800;
+  }
+  if (el("liveBgmVol")) {
+    el("liveBgmVol").value = s.bgm_volume ?? 25;
+    el("liveBgmVolVal").textContent = (s.bgm_volume ?? 25) + "%";
+  }
+}
+
 setupConfig(() => {
   refreshAvatar();
+  syncLiveAudioControls();
   if (state) paint(state);
 });
 
@@ -253,7 +277,7 @@ action("start", async () => {
     ))
   )
     return;
-  await api("/api/start", {});
+  await api("/api/start", { keep_events: !!el("keepEventsOnStart")?.checked });
   await tick();
 });
 
@@ -395,28 +419,35 @@ action("choreo", async () => {
   await tick();
 });
 
-async function loadTracks() {
-  const items = await api("/api/tracks"),
-    select = el("tracks"),
-    old = select.value;
-  select.replaceChildren();
-  if (!items.length) select.add(new Option("曲库为空", ""));
-  for (const t of items) {
-    select.add(new Option(t.title + " · " + timespan(t.duration_ms), t.id));
-  }
-  if (items.some((t) => t.id === old)) select.value = old;
-  el("removeTrack").disabled = !items.length;
-  el("playTrack").disabled = !items.length || state?.phase !== "live";
+const AUDIO_EXT_RE = /\.(mp3|wav|flac|m4a|aac|ogg|opus|aiff|aif|wma|webm|mp4)$/i;
+function isImportableAudio(file, allowMp4) {
+  if (!file || !file.name || file.name.startsWith(".")) return false;
+  if (file.type && file.type.startsWith("audio/")) return true;
+  if (allowMp4 && file.type === "video/mp4") return true;
+  if (!allowMp4 && /\.mp4$/i.test(file.name)) return false;
+  return AUDIO_EXT_RE.test(file.name);
 }
 
-el("addTrack").onchange = async (e) => {
-  const input = e.currentTarget;
-  const files = Array.from(input.files);
-  if (!files.length) return;
-  const status = el("trackImportStatus");
-  const details = el("trackImportErrors");
+function fileExt(name) {
+  const m = /\.([^.]+)$/.exec(name);
+  return m ? m[1].toLowerCase() : "";
+}
+
+async function importAudioBatch(rawFiles, input, { endpoint, statusId, detailsId, allowMp4, onDone }) {
+  const files = Array.from(rawFiles)
+    .filter((f) => isImportableAudio(f, allowMp4))
+    .sort((a, b) => a.name.localeCompare(b.name, "zh-CN", { numeric: true }));
+  if (!files.length) {
+    notify("所选内容中未找到可导入的音频文件");
+    input.value = "";
+    return;
+  }
+  const status = el(statusId);
+  const details = el(detailsId);
   const errors = details.querySelector("ul");
   let imported = 0;
+  let skipped = 0;
+  let failed = 0;
   input.disabled = true;
   status.hidden = false;
   details.hidden = true;
@@ -424,39 +455,236 @@ el("addTrack").onchange = async (e) => {
   errors.replaceChildren();
   try {
     for (const [index, file] of files.entries()) {
-      status.textContent = `正在导入第 ${index + 1} / ${files.length} 首`;
+      status.textContent = `正在导入第 ${index + 1} / ${files.length} 首…`;
       const title = file.name.replace(/\.[^.]+$/, "");
+      const ext = fileExt(file.name);
+      const headers = ext ? { "X-File-Ext": ext } : undefined;
       try {
-        await request("/api/tracks/" + encodeURIComponent(title), { method: "PUT", body: file });
+        await request(endpoint + encodeURIComponent(title), {
+          method: "PUT",
+          headers,
+          body: file,
+        });
         imported += 1;
       } catch (error) {
-        const item = document.createElement("li");
-        item.textContent = `${file.name}：${error.message}`;
-        errors.append(item);
+        if (/已存在/.test(error.message)) {
+          skipped += 1;
+        } else {
+          failed += 1;
+          const item = document.createElement("li");
+          item.textContent = `${file.name}：${error.message}`;
+          errors.append(item);
+        }
       }
     }
-    status.textContent = `已导入 ${imported} 首，失败 ${files.length - imported} 首`;
-    details.hidden = imported === files.length;
-    if (imported) await loadTracks();
+    const parts = [`新增 ${imported} 首`];
+    if (skipped) parts.push(`跳过已存在 ${skipped} 首`);
+    if (failed) parts.push(`失败 ${failed} 首`);
+    status.textContent = parts.join(" · ");
+    details.hidden = failed === 0;
+    if (imported) await onDone();
   } catch (error) {
     notify(error.message);
   } finally {
     input.value = "";
     input.disabled = false;
   }
-};
+}
+
+async function loadTracks() {
+  const items = await api("/api/tracks"),
+    select = el("tracks"),
+    old = select.value;
+  select.replaceChildren();
+  if (!items.length) select.add(new Option("曲库为空", ""));
+  for (const t of items) {
+    const tag = t.source_ext ? " · 原音质" : "";
+    select.add(new Option(t.title + " · " + timespan(t.duration_ms) + tag, t.id));
+  }
+  if (items.some((t) => t.id === old)) select.value = old;
+  el("trackCount").textContent = items.length ? `共 ${items.length} 首` : "";
+  el("removeTrack").disabled = !items.length;
+  el("clearTracks").disabled = !items.length;
+  el("previewTrack").disabled = !items.length;
+  el("playTrack").disabled = !items.length || state?.phase !== "live";
+}
+
+async function loadBgm() {
+  const items = await api("/api/bgm"),
+    select = el("bgmTracks"),
+    old = select.value;
+  select.replaceChildren();
+  if (!items.length) select.add(new Option("暂无背景音乐", ""));
+  for (const t of items) {
+    select.add(new Option(t.title + " · " + timespan(t.duration_ms), t.id));
+  }
+  if (items.some((t) => t.id === old)) select.value = old;
+  el("bgmCount").textContent = items.length ? `共 ${items.length} 首` : "";
+  el("toggleBgm").disabled = !items.length;
+  el("nextBgm").disabled = items.length < 2;
+  el("previewBgm").disabled = !items.length;
+  el("removeBgm").disabled = !items.length;
+  el("clearBgm").disabled = !items.length;
+}
+
+el("addTrack").onchange = (e) =>
+  importAudioBatch(e.currentTarget.files, e.currentTarget, {
+    endpoint: "/api/tracks/",
+    statusId: "trackImportStatus",
+    detailsId: "trackImportErrors",
+    allowMp4: true,
+    onDone: loadTracks,
+  });
+
+el("addTrackFolder").onchange = (e) =>
+  importAudioBatch(e.currentTarget.files, e.currentTarget, {
+    endpoint: "/api/tracks/",
+    statusId: "trackImportStatus",
+    detailsId: "trackImportErrors",
+    allowMp4: true,
+    onDone: loadTracks,
+  });
+
+el("addBgm").onchange = (e) =>
+  importAudioBatch(e.currentTarget.files, e.currentTarget, {
+    endpoint: "/api/bgm/",
+    statusId: "bgmImportStatus",
+    detailsId: "bgmImportErrors",
+    allowMp4: false,
+    onDone: loadBgm,
+  });
+
+el("addBgmFolder").onchange = (e) =>
+  importAudioBatch(e.currentTarget.files, e.currentTarget, {
+    endpoint: "/api/bgm/",
+    statusId: "bgmImportStatus",
+    detailsId: "bgmImportErrors",
+    allowMp4: false,
+    onDone: loadBgm,
+  });
 
 action("playTrack", async () => {
   await api("/api/tracks/" + el("tracks").value, {});
-  notify("曲目已加入播出队列");
+  notify("曲目已加入演唱队列");
+});
+
+action("previewTrack", async () => {
+  const id = el("tracks").value;
+  if (!id) return;
+  const r = await request("/api/tracks/" + encodeURIComponent(id) + "/audio");
+  if (audioUrl) URL.revokeObjectURL(audioUrl);
+  audioUrl = URL.createObjectURL(await r.blob());
+  const player = el("audio");
+  player.src = audioUrl;
+  player.hidden = false;
+  await player.play();
 });
 
 action("removeTrack", async () => {
-  if (await confirmAction("从曲库移除", "移除所选曲目在 Avatar3D 中的副本。", "移除")) {
+  if (await confirmAction("从演唱曲库移除", "移除所选曲目在 Avatar3D 中的副本。", "移除")) {
     await request("/api/tracks/" + el("tracks").value, { method: "DELETE" });
     await loadTracks();
   }
 });
+
+action("clearTracks", async () => {
+  if (await confirmAction("清空演唱曲库", "移除演唱曲库中的全部歌曲副本（不影响原始文件）。", "清空全部")) {
+    await request("/api/tracks", { method: "DELETE" });
+    await loadTracks();
+    notify("已清空演唱曲库");
+  }
+});
+
+action("toggleBgm", async () => {
+  const res = await api("/api/bgm/control", { action: "toggle" });
+  await tick();
+  if (!res.bgm?.enabled) {
+    notify("背景音乐已暂停");
+  } else if (!state?.output) {
+    notify("背景音乐已开启，请先点「打开舞台」或在 OBS 加载舞台以收听声音");
+  } else if (state?.output?.includes("允许播放")) {
+    notify("背景音乐已开启，请切到舞台页点击「恢复声音」允许播放");
+  } else {
+    notify("背景音乐已开启（由舞台 / OBS 输出；若用 OBS 需在高级音频属性开启监听）");
+  }
+});
+
+action("previewBgm", async () => {
+  const id = el("bgmTracks").value;
+  if (!id) return;
+  const r = await request("/api/bgm/" + encodeURIComponent(id) + "/audio");
+  if (audioUrl) URL.revokeObjectURL(audioUrl);
+  audioUrl = URL.createObjectURL(await r.blob());
+  const player = el("audio");
+  player.src = audioUrl;
+  player.hidden = false;
+  await player.play();
+});
+
+action("nextBgm", async () => {
+  await api("/api/bgm/control", { action: "next" });
+  await tick();
+});
+
+el("bgmTracks").onchange = async () => {
+  const id = el("bgmTracks").value;
+  if (id && (state?.bgm_playing || state?.current_bgm)) {
+    try {
+      await api("/api/bgm/control", { action: "select", id });
+      await tick();
+    } catch (e) {
+      notify(e.message);
+    }
+  }
+};
+
+action("removeBgm", async () => {
+  if (await confirmAction("移除背景音乐", "移除所选背景音乐在 Avatar3D 中的副本。", "移除")) {
+    await request("/api/bgm/" + el("bgmTracks").value, { method: "DELETE" });
+    await loadBgm();
+    await tick();
+  }
+});
+
+action("clearBgm", async () => {
+  if (await confirmAction("清空背景音乐", "移除全部背景音乐副本（不影响原始文件）。", "清空全部")) {
+    await request("/api/bgm", { method: "DELETE" });
+    await loadBgm();
+    await tick();
+    notify("已清空背景音乐");
+  }
+});
+
+let liveAudioTimer = 0;
+function pushLiveAudio(patch) {
+  if (configuration?.settings) Object.assign(configuration.settings, patch);
+  clearTimeout(liveAudioTimer);
+  liveAudioTimer = setTimeout(async () => {
+    try {
+      await api("/api/audio-live", patch);
+    } catch (e) {
+      notify(e.message);
+    }
+  }, 180);
+}
+
+el("liveSongVol").oninput = (e) => {
+  const v = Number(e.target.value);
+  el("liveSongVolVal").textContent = v + "%";
+  pushLiveAudio({ song_volume: v });
+};
+
+el("liveSyncOffset").onchange = (e) => {
+  const v = Math.max(0, Math.min(4000, Math.round(Number(e.target.value) || 0)));
+  e.target.value = v;
+  pushLiveAudio({ song_sync_offset_ms: v });
+};
+
+el("liveBgmVol").oninput = (e) => {
+  const v = Number(e.target.value);
+  el("liveBgmVolVal").textContent = v + "%";
+  pushLiveAudio({ bgm_volume: v });
+};
 
 action("reset", () => api("/api/command", { kind: "reset" }));
 action("removeRef", () => api("/api/command", { kind: "remove_reference" }));
@@ -478,12 +706,23 @@ async function sendSimulated(kind) {
   notify(
     state?.phase === "live"
       ? "已触发模拟事件"
-      : "已记录模拟事件（当前未开播，连线后会自动触发播报）",
+      : "已写入动态日志（未开播不会排入播报；可点「清空动态」清理）",
   );
 }
 action("simJoin", () => sendSimulated("join"));
 action("simGiftBtn", () => sendSimulated("gift"));
 action("simChat", () => sendSimulated("chat"));
+action("clearEvents", async () => {
+  await api("/api/events/clear", {});
+  await tick();
+  notify("已清空直播动态");
+});
+if (el("keepEventsOnStart")) {
+  el("keepEventsOnStart").checked = localStorage.getItem("avatar3d.keepEvents") === "1";
+  el("keepEventsOnStart").onchange = (e) => {
+    localStorage.setItem("avatar3d.keepEvents", e.target.checked ? "1" : "0");
+  };
+}
 
 action("record", async () => {
   const v = await api("/api/recording", { id: state.live_id });
@@ -519,6 +758,7 @@ if (!token) {
   try {
     await loadConfig();
     await loadTracks();
+    await loadBgm();
     await tick();
     setInterval(tick, 1200);
   } catch (e) {

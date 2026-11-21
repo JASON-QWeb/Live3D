@@ -140,14 +140,41 @@ async fn auto_reply(
     app.event(label, answer);
     Ok(())
 }
+struct AbortOnDrop(Option<tokio::task::JoinHandle<()>>);
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        if let Some(h) = self.0.take() {
+            h.abort();
+        }
+    }
+}
+
+fn clear_stage_song(app: &App) {
+    let had_song = lock(&app.screen).song.take().is_some();
+    if had_song {
+        app.notify_stage(json!({"event": "song_stop"}));
+    }
+}
+
+fn notify_bgm_state(app: &App) {
+    let bgm = crate::output::bgm_snapshot(app);
+    app.notify_stage(json!({"event": "bgm_state", "bgm": bgm}));
+}
+
 async fn play_track(app: &App, run: &Run, o: u64, at: &mut Option<u64>, id: uuid::Uuid) -> Result<()> {
-    let title = crate::library::list(app)?
-        .into_iter()
-        .find(|t| t.id == id)
-        .map(|t| t.title)
-        .unwrap_or_else(|| "当前曲目".into());
+    let tracks = crate::library::list(app)?;
+    let (title, next_idx) = tracks
+        .iter()
+        .enumerate()
+        .find(|(_, t)| t.id == id)
+        .map(|(i, t)| (t.title.clone(), (i + 1) % tracks.len().max(1)))
+        .unwrap_or_else(|| ("当前曲目".into(), 0));
+    if !tracks.is_empty() {
+        run.next_track_index.store(next_idx, Ordering::Relaxed);
+    }
     let pcm = crate::library::audio(app, id).await?;
     let cfg = app.config();
+    let use_stage_audio = cfg.song_audio_mode == "stage";
 
     {
         // Lock song_gifts briefly when entering singing state for strict ordering with gift buffering.
@@ -159,6 +186,28 @@ async fn play_track(app: &App, run: &Run, o: u64, at: &mut Option<u64>, id: uuid
         v.singing = true;
         v.current_song = title.clone();
     }
+    // Pause BGM cleanly before singing starts.
+    notify_bgm_state(app);
+
+    let playback_id = uuid::Uuid::new_v4().to_string();
+    let vol = cfg.song_volume as f32 / 100.0;
+    if use_stage_audio {
+        lock(&app.screen).song = Some(crate::state::StageSong {
+            playback_id: playback_id.clone(),
+            track_id: id.to_string(),
+            title: title.clone(),
+            state: "prepare".into(),
+            started_at: 0,
+            volume: vol,
+        });
+        app.notify_stage(json!({
+            "event": "song_prepare",
+            "playback_id": playback_id,
+            "track_id": id.to_string(),
+            "title": title,
+            "volume": vol,
+        }));
+    }
 
     let sing_act = cfg.active_singing_action().trim();
     if !sing_act.is_empty() {
@@ -167,22 +216,71 @@ async fn play_track(app: &App, run: &Run, o: u64, at: &mut Option<u64>, id: uuid
         tokio::time::sleep(Duration::from_millis(400)).await;
     } else {
         app.event("唱歌", format!("开始演唱《{title}》"));
+        if use_stage_audio {
+            // Brief window so Stage finishes prebuffering the local Hi-Fi track.
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
     }
+
+    let sync_offset_ms = if use_stage_audio {
+        app.config().song_sync_offset_ms as u64
+    } else {
+        0
+    };
+    let _sync_guard = if use_stage_audio {
+        let app_clone = app.clone();
+        let pid = playback_id.clone();
+        let tid = id.to_string();
+        let song_title = title.clone();
+        Some(AbortOnDrop(Some(tokio::spawn(async move {
+            if sync_offset_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(sync_offset_ms)).await;
+            }
+            let started_at = now();
+            let current_vol = app_clone.config().song_volume as f32 / 100.0;
+            let active = {
+                let mut sc = lock(&app_clone.screen);
+                if let Some(ref mut s) = sc.song
+                    && s.playback_id == pid
+                {
+                    s.state = "play".into();
+                    s.started_at = started_at;
+                    s.volume = current_vol;
+                    true
+                } else {
+                    false
+                }
+            };
+            if active {
+                app_clone.notify_stage(json!({
+                    "event": "song_play",
+                    "playback_id": pid,
+                    "track_id": tid,
+                    "title": song_title,
+                    "volume": current_vol,
+                }));
+            }
+        }))))
+    } else {
+        None
+    };
 
     stream_pcm(app, run, o, at, pcm, String::new()).await?;
 
-    // Song finished: atomically leave singing state and collect all gifts received during the song.
+    // Wait the remaining sync tail so the local Hi-Fi song finishes cleanly before unmuting TRTC.
+    if use_stage_audio && sync_offset_ms > 0 {
+        tokio::time::sleep(Duration::from_millis(sync_offset_ms)).await;
+    }
+    drop(_sync_guard);
+    clear_stage_song(app);
+
+    // Song audio finished: atomically leave gift-buffering state and collect buffered gifts.
     let buffered_gifts = {
         let mut g = lock(&run.song_gifts);
         let drained = std::mem::take(&mut *g);
         run.singing.store(false, Ordering::SeqCst);
         drained
     };
-    {
-        let mut v = lock(&app.view);
-        v.singing = false;
-        v.current_song.clear();
-    }
     run.last_song_end_ms.store(now(), Ordering::Relaxed);
 
     let post_act = cfg.active_post_sing_action().trim();
@@ -233,7 +331,19 @@ async fn play(app: &App, run: &Run, o: Offer) -> Result<()> {
             label,
         } => auto_reply(app, run, o.epoch, &mut first, kind, &prompt, &label).await?,
         Job::Track(id) => play_track(app, run, o.epoch, &mut first, id).await?,
-        Job::Media(pcm, s) => stream_pcm(app, run, o.epoch, &mut first, pcm, s).await?,
+        Job::Media(pcm, s) => {
+            {
+                let mut v = lock(&app.view);
+                v.singing = true;
+                v.current_song = if s.is_empty() {
+                    "播出音频".into()
+                } else {
+                    s.clone()
+                };
+            }
+            notify_bgm_state(app);
+            stream_pcm(app, run, o.epoch, &mut first, pcm, s).await?;
+        }
     }
     lock(&app.view).metrics.utterances += 1;
     Ok(())
@@ -274,6 +384,7 @@ pub async fn worker(
         }
         run.busy.store(true, Ordering::SeqCst);
         lock(&app.view).voice_busy = true;
+        notify_bgm_state(&app);
         let mut interrupted = false;
         let mut stopped = false;
         tokio::select! {
@@ -290,6 +401,7 @@ pub async fn worker(
                 }
             }
         }
+        clear_stage_song(&app);
         {
             let mut g = lock(&run.song_gifts);
             run.singing.store(false, Ordering::SeqCst);
@@ -303,6 +415,7 @@ pub async fn worker(
             v.singing = false;
             v.current_song.clear();
         }
+        notify_bgm_state(&app);
         run.last_activity_ms.store(now(), Ordering::Relaxed);
         crate::choreo::hold(&app, &run);
         if stopped {

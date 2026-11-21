@@ -6,8 +6,57 @@ use serde_json::json;
 use std::{path::PathBuf, process::Stdio, time::Duration};
 use tokio::{io::AsyncWriteExt, process::Command};
 
-const MAX_AUDIO: usize = 32 * 1024 * 1024;
+pub const MAX_AUDIO: usize = 128 * 1024 * 1024;
 pub const FRAME: usize = 960; // 20 ms at 24 kHz, signed 16-bit mono
+
+pub fn detect_audio_ext(data: &[u8], hint: Option<&str>) -> Option<&'static str> {
+    if data.starts_with(b"RIFF") && data.get(8..12) == Some(b"WAVE") {
+        return Some("wav");
+    }
+    if data.starts_with(b"fLaC") {
+        return Some("flac");
+    }
+    if data.starts_with(b"OggS") {
+        return Some("ogg");
+    }
+    if data.starts_with(b"ID3")
+        || (data.len() >= 2 && data[0] == 0xff && (data[1] & 0xe0) == 0xe0 && (data[1] & 0x06) != 0)
+    {
+        return Some("mp3");
+    }
+    if data.get(4..8) == Some(b"ftyp") {
+        return Some("m4a");
+    }
+    if data.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+        return Some("webm");
+    }
+    let ext = hint
+        .and_then(|s| s.rsplit('.').next())
+        .map(|s| s.trim().to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("mp3") => Some("mp3"),
+        Some("wav") => Some("wav"),
+        Some("flac") => Some("flac"),
+        Some("m4a" | "mp4") => Some("m4a"),
+        Some("aac") => Some("aac"),
+        Some("ogg" | "opus") => Some("ogg"),
+        Some("webm") => Some("webm"),
+        _ => None,
+    }
+}
+
+pub fn mime_for_ext(ext: &str) -> &'static str {
+    match ext {
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "flac" => "audio/flac",
+        "m4a" | "mp4" => "audio/mp4",
+        "aac" => "audio/aac",
+        "ogg" | "opus" => "audio/ogg",
+        "webm" => "audio/webm",
+        _ => "application/octet-stream",
+    }
+}
 pub fn ffmpeg() -> Option<PathBuf> {
     [
         "/opt/homebrew/bin/ffmpeg",
@@ -60,7 +109,7 @@ pub async fn checked(r: reqwest::Response, service: &str) -> Result<reqwest::Res
 pub async fn decode(data: &[u8]) -> Result<Bytes> {
     ensure!(
         data.len() <= MAX_AUDIO && !data.is_empty(),
-        "音频为空或超过 32 MiB"
+        "音频为空或超过 128 MiB"
     );
     let exe = ffmpeg().context("请安装 ffmpeg（brew install ffmpeg）")?;
     let mut c = Command::new(exe)
@@ -237,5 +286,18 @@ mod tests {
         assert_eq!(FRAME as u32, bytes_per_second * 20 / 1000);
         assert_eq!(&header[36..40], b"data");
         assert_eq!(header.len(), 44);
+    }
+
+    #[test]
+    fn detects_audio_formats_from_magic_and_extension() {
+        assert_eq!(detect_audio_ext(b"RIFF\x00\x00\x00\x00WAVEfmt ", None), Some("wav"));
+        assert_eq!(detect_audio_ext(b"fLaC\x00\x00\x00\x22", None), Some("flac"));
+        assert_eq!(detect_audio_ext(b"ID3\x03\x00\x00", None), Some("mp3"));
+        assert_eq!(detect_audio_ext(b"OggS\x00\x02", None), Some("ogg"));
+        assert_eq!(detect_audio_ext(b"\x00\x00\x00\x18ftypM4A ", None), Some("m4a"));
+        assert_eq!(detect_audio_ext(b"unknown", Some("song.mp3")), Some("mp3"));
+        assert_eq!(detect_audio_ext(b"unknown", Some("song.wma")), None);
+        assert_eq!(mime_for_ext("flac"), "audio/flac");
+        assert_eq!(mime_for_ext("mp3"), "audio/mpeg");
     }
 }

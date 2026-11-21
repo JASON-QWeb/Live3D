@@ -54,6 +54,8 @@ pub struct View {
     pub voice_busy: bool,
     pub singing: bool,
     pub current_song: String,
+    pub bgm_playing: bool,
+    pub current_bgm: String,
     pub choreo: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -63,6 +65,15 @@ pub struct Rtc {
     pub user_id: String,
     pub token: String,
 }
+#[derive(Clone, Serialize)]
+pub struct StageSong {
+    pub playback_id: String,
+    pub track_id: String,
+    pub title: String,
+    pub state: String, // "prepare" | "play"
+    pub started_at: u64,
+    pub volume: f32,
+}
 #[derive(Default)]
 pub struct Screen {
     pub lease: String,
@@ -70,6 +81,10 @@ pub struct Screen {
     pub rtc: Option<Rtc>,
     pub tone: Option<crate::soundcheck::Tone>,
     pub poster: Option<(u64, bytes::Bytes)>,
+    pub song: Option<StageSong>,
+    pub bgm_enabled: bool,
+    pub bgm_index: usize,
+    pub bgm_revision: u64,
 }
 pub struct Inner {
     pub dir: PathBuf,
@@ -87,6 +102,8 @@ pub struct Inner {
     pub library_gate: tokio::sync::Mutex<()>,
     pub sdk_gate: tokio::sync::Mutex<()>,
     pub seen: Mutex<VecDeque<String>>,
+    pub stage_tx: tokio::sync::broadcast::Sender<Value>,
+    pub boot_id: String,
 }
 pub type App = Arc<Inner>;
 impl Inner {
@@ -103,6 +120,7 @@ impl Inner {
             .into(),
             ..View::default()
         };
+        let (stage_tx, _) = tokio::sync::broadcast::channel(32);
         Ok(Arc::new(Self {
             conf: Mutex::new(config::load_settings(&dir)?),
             tokens: Tokens::load(&dir)?,
@@ -122,7 +140,12 @@ impl Inner {
             library_gate: tokio::sync::Mutex::new(()),
             sdk_gate: tokio::sync::Mutex::new(()),
             seen: Mutex::new(VecDeque::new()),
+            stage_tx,
+            boot_id: uuid::Uuid::new_v4().to_string(),
         }))
+    }
+    pub fn notify_stage(&self, payload: Value) {
+        let _ = self.stage_tx.send(payload);
     }
     pub fn config(&self) -> Settings {
         lock(&self.conf).clone()
