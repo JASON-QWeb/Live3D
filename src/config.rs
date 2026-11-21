@@ -289,10 +289,9 @@ impl Default for Settings {
             auto_thank_gifts: true,
             auto_sing: true,
             auto_sing_gap: 120,
-            singing_action: "自然投入地唱歌，神情柔和灵动，随旋律轻轻晃动，情绪高潮处自然闭眼陶醉"
-                .into(),
+            singing_action: "自然投入地唱歌，神情柔和灵动，随旋律轻轻晃动".into(),
             singing_action_en:
-                "Sing naturally with gentle expression, swaying lightly with the melody and getting immersed at emotional parts"
+                "Sing naturally with gentle, expressive demeanor, swaying lightly with the melody"
                     .into(),
             post_sing_action: "唱完歌微笑看向镜头，神态温柔放松".into(),
             post_sing_action_en: "Finish singing and smile warmly at the camera, relaxed and natural"
@@ -800,6 +799,8 @@ mod tests {
         assert_eq!(loaded.bgm_volume, 25);
         assert_eq!(loaded.bgm_duck_percent, 30);
         assert_eq!(loaded.prompt_profile, "xiaorou");
+        assert!(!loaded.singing_action.contains("闭眼"));
+        assert!(!loaded.singing_action.contains("陶醉"));
     }
 
     #[test]
