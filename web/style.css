@@ -224,6 +224,16 @@ textarea {
   white-space: nowrap;
 }
 
+.lang-chip {
+  font: 600 11px/1.2 var(--mono);
+  color: var(--body);
+  background: var(--surface-well);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  padding: 3px 8px;
+  margin-right: 2px;
+}
+
 i#lamp {
   width: 7px;
   height: 7px;
@@ -1283,6 +1293,24 @@ audio {
   color: var(--ink);
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.sim-box {
+  margin-top: 12px;
+}
+
+.sim-fields {
+  gap: 8px;
+}
+
+.sim-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 8px;
+}
+
+.sim-row .sim-count {
+  max-width: 96px;
 }
 
 /* ==========================================================================

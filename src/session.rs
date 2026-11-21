@@ -9,12 +9,27 @@ use crate::{
 };
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
-use std::{fs, io::Write, sync::Arc, time::Duration};
+use std::{
+    fs,
+    io::Write,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, AtomicUsize},
+    },
+    time::Duration,
+};
 use tokio::{
     sync::{mpsc, watch},
     time::sleep,
 };
 use tokio_util::sync::CancellationToken;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PendingGift {
+    pub author: Option<String>,
+    pub gift_name: String,
+    pub count: u32,
+}
 
 pub struct Run {
     pub stop: CancellationToken,
@@ -23,8 +38,17 @@ pub struct Run {
     pub jobs: mpsc::Sender<Offer>,
     pub gifts: mpsc::Sender<Offer>,
     pub choreo: watch::Sender<bool>,
-    pub next_action: std::sync::atomic::AtomicU64,
-    pub history: std::sync::Mutex<std::collections::VecDeque<(String, String)>>,
+    pub next_action: AtomicU64,
+    pub history: Mutex<std::collections::VecDeque<(String, String)>>,
+    pub singing: AtomicBool,
+    pub busy: AtomicBool,
+    pub last_activity_ms: AtomicU64,
+    pub last_song_end_ms: AtomicU64,
+    pub last_ambient_ms: AtomicU64,
+    pub last_join_welcome_ms: AtomicU64,
+    pub song_gifts: Mutex<Vec<PendingGift>>,
+    pub next_track_index: AtomicUsize,
+    pub next_welcome_index: AtomicUsize,
 }
 pub fn signal(app: &App, t: u8, p: Value) -> Result<()> {
     let r = app.active()?;
@@ -63,6 +87,15 @@ pub async fn start(app: &App) -> Result<()> {
         choreo,
         next_action: 0.into(),
         history: Default::default(),
+        singing: AtomicBool::new(false),
+        busy: AtomicBool::new(false),
+        last_activity_ms: AtomicU64::new(0),
+        last_song_end_ms: AtomicU64::new(0),
+        last_ambient_ms: AtomicU64::new(0),
+        last_join_welcome_ms: AtomicU64::new(0),
+        song_gifts: Mutex::new(Vec::new()),
+        next_track_index: AtomicUsize::new(0),
+        next_welcome_index: AtomicUsize::new(0),
     });
     *lock(&app.run) = Some(run.clone());
     lock(&app.seen).clear();
@@ -78,6 +111,7 @@ pub async fn start(app: &App) -> Result<()> {
     tokio::spawn(async move {
         let worker = tokio::spawn(speech::worker(core.clone(), active.clone(), jrx, grx));
         let schedule = tokio::spawn(crate::choreo::worker(core.clone(), active.clone()));
+        let director = tokio::spawn(crate::director::worker(core.clone(), active.clone()));
         let timer = active.stop.clone();
         let limit = tokio::spawn(async move {
             sleep(Duration::from_secs(cfg.max_minutes as u64 * 60)).await;
@@ -95,6 +129,7 @@ pub async fn start(app: &App) -> Result<()> {
         limit.abort();
         let _ = worker.await;
         let _ = schedule.await;
+        let _ = director.await;
         let _g = core.gate.lock().await;
         lock(&core.screen).rtc = None;
         {
@@ -104,6 +139,8 @@ pub async fn start(app: &App) -> Result<()> {
             v.pending = 0;
             v.choreo = false;
             v.voice_busy = false;
+            v.singing = false;
+            v.current_song.clear();
         }
         *lock(&core.run) = None;
     });

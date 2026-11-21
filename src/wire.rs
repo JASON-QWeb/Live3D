@@ -205,6 +205,25 @@ pub async fn serve(
                         l.clear_stale_audio(&mut epoch).await?;
                         ready = true;
                         retry = None;
+                        let t = now();
+                        let _ = run.last_activity_ms.compare_exchange(
+                            0,
+                            t,
+                            std::sync::atomic::Ordering::SeqCst,
+                            std::sync::atomic::Ordering::Relaxed,
+                        );
+                        let _ = run.last_song_end_ms.compare_exchange(
+                            0,
+                            t,
+                            std::sync::atomic::Ordering::SeqCst,
+                            std::sync::atomic::Ordering::Relaxed,
+                        );
+                        let _ = run.last_ambient_ms.compare_exchange(
+                            0,
+                            t,
+                            std::sync::atomic::Ordering::SeqCst,
+                            std::sync::atomic::Ordering::Relaxed,
+                        );
                         app.phase("live", "云端会话已就绪");
                         app.event("连线", "数字人信令已就绪");
                     }

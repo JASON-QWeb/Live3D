@@ -17,6 +17,6 @@ fi
 export HF_HOME="${AVATAR3D_MODEL_CACHE:-$AVATAR3D_MODEL_DIR/models}"
 export PYTHONUNBUFFERED=1
 if [[ "$1" == voice ]]; then
-  exec "$AVATAR3D_MODEL_DIR/venv/bin/python" -m mlx_audio.server --host 127.0.0.1 --port 19849
+  exec "$AVATAR3D_MODEL_DIR/venv/bin/python" "$AVATAR3D_MODEL_DIR/voice-service.py"
 fi
 exec "$AVATAR3D_MODEL_DIR/venv/bin/python" -m mlx_lm.server --host 127.0.0.1 --port 19847 --model mlx-community/Qwen2.5-1.5B-Instruct-4bit

@@ -158,17 +158,20 @@ function paint(v) {
   const stageDot = el("stageDot");
   if (stageDot) stageDot.classList.toggle("is-ready", !!v.output);
   el("clock").textContent = v.started ? timespan((v.ended || Date.now()) - v.started) : "00:00:00";
-  el("pending").textContent = v.pending + (v.voice_busy ? " · 播出中" : "");
+  el("pending").textContent =
+    v.pending + (v.singing ? " · 演唱《" + (v.current_song || "曲目") + "》" : v.voice_busy ? " · 播出中" : "");
   const strip = el("signalStrip");
   if (strip) {
     strip.dataset.live = String(live);
-    strip.dataset.speaking = String(live && !!v.voice_busy);
+    strip.dataset.speaking = String(live && (!!v.voice_busy || !!v.singing));
     const caption = el("signalCaption");
     if (caption) {
       caption.textContent = live
-        ? v.voice_busy
-          ? "直播中 · 语音播出"
-          : "直播中 · 推流正常"
+        ? v.singing
+          ? "直播中 · 正在演唱《" + (v.current_song || "曲目") + "》"
+          : v.voice_busy
+            ? "直播中 · 语音播出"
+            : "直播中 · 推流正常"
         : busy()
           ? "连线中 · 建立信令"
           : v.output
@@ -407,17 +410,39 @@ async function loadTracks() {
 }
 
 el("addTrack").onchange = async (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
+  const input = e.currentTarget;
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  const status = el("trackImportStatus");
+  const details = el("trackImportErrors");
+  const errors = details.querySelector("ul");
+  let imported = 0;
+  input.disabled = true;
+  status.hidden = false;
+  details.hidden = true;
+  details.open = false;
+  errors.replaceChildren();
   try {
-    const title = f.name.replace(/\.[^.]+$/, "");
-    await request("/api/tracks/" + encodeURIComponent(title), { method: "PUT", body: f });
-    await loadTracks();
-    notify("已导入曲库");
-  } catch (e) {
-    notify(e.message);
+    for (const [index, file] of files.entries()) {
+      status.textContent = `正在导入第 ${index + 1} / ${files.length} 首`;
+      const title = file.name.replace(/\.[^.]+$/, "");
+      try {
+        await request("/api/tracks/" + encodeURIComponent(title), { method: "PUT", body: file });
+        imported += 1;
+      } catch (error) {
+        const item = document.createElement("li");
+        item.textContent = `${file.name}：${error.message}`;
+        errors.append(item);
+      }
+    }
+    status.textContent = `已导入 ${imported} 首，失败 ${files.length - imported} 首`;
+    details.hidden = imported === files.length;
+    if (imported) await loadTracks();
+  } catch (error) {
+    notify(error.message);
   } finally {
-    el("addTrack").value = "";
+    input.value = "";
+    input.disabled = false;
   }
 };
 
@@ -435,6 +460,30 @@ action("removeTrack", async () => {
 
 action("reset", () => api("/api/command", { kind: "reset" }));
 action("removeRef", () => api("/api/command", { kind: "remove_reference" }));
+
+async function sendSimulated(kind) {
+  const platform = el("simPlatform").value;
+  const author = el("simAuthor").value.trim() || "小明";
+  const text = el("simText").value.trim();
+  const payload = { platform, kind, author };
+  if (kind === "gift") {
+    payload.gift_name = el("simGift").value.trim() || "玫瑰";
+    payload.gift_count = Math.max(1, Number(el("simCount").value) || 1);
+    if (text) payload.text = text;
+  } else if (kind === "chat") {
+    payload.text = text || (configuration?.settings.live_language === "en" ? "Hi, love your singing!" : "晚上好呀，唱首歌听听");
+  }
+  await api("/api/simulate", payload);
+  await tick();
+  notify(
+    state?.phase === "live"
+      ? "已触发模拟事件"
+      : "已记录模拟事件（当前未开播，连线后会自动触发播报）",
+  );
+}
+action("simJoin", () => sendSimulated("join"));
+action("simGiftBtn", () => sendSimulated("gift"));
+action("simChat", () => sendSimulated("chat"));
 
 action("record", async () => {
   const v = await api("/api/recording", { id: state.live_id });

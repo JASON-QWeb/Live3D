@@ -4,6 +4,7 @@ mod audio;
 mod choreo;
 mod config;
 mod dialogue;
+mod director;
 mod library;
 mod obs;
 mod output;

@@ -52,6 +52,8 @@ pub struct View {
     pub input: String,
     pub pending: u32,
     pub voice_busy: bool,
+    pub singing: bool,
+    pub current_song: String,
     pub choreo: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -130,7 +132,7 @@ impl Inner {
         v.phase = phase.into();
         v.message = message.into();
     }
-    pub fn event(&self, kind: &str, msg: impl Into<String>) {
+    pub fn event(&self, kind: impl Into<String>, msg: impl Into<String>) {
         let mut v = lock(&self.view);
         if v.events.len() >= 120 {
             v.events.pop_front();

@@ -6,7 +6,7 @@ Avatar3D Live是 Apple Silicon Mac 上的角色互动直播控制台。观众发
 
 双击「Avatar3D Live.app」。应用会在默认浏览器打开控制台，后台进程仅监听本机。再次打开应用可以找回控制台；要退出后台进程，使用「设置 → 退出 Avatar3D」。此版本在 Apple M4 上构建与验证，采用本地签名。新机器需要 FFmpeg，运行本机模型还需要 uv。使用 Homebrew 可以执行 `brew install ffmpeg uv`，推流使用 OBS Studio 28 或更新版本。[OBS 下载](https://obsproject.com/download)
 
-在「设置」中点「启动本机 MLX」和「启动本机对话」。首次启动会安装各自的 Python 环境并下载模型，看到两个「已就绪」后即可试听。本机默认使用 Kokoro 中文语音与 Qwen2.5-1.5B-Instruct 4bit，均可换成自有兼容接口。参考声音需要所选语音模型支持参考录音，并与逐字稿一起填写。[MLX Audio](https://github.com/Blaizzy/mlx-audio) · [MLX LM](https://github.com/ml-explore/mlx-lm)
+在「设置」中点「启动本机 MLX」和「启动本机对话」。首次启动会安装各自的 Python 环境并下载模型，看到两个「已就绪」后即可试听。本机语音使用 Ming 3.0 0.5B 4-bit 的灵小柔和 ZONOS3-Mini 的 Willow，纯英文使用 Willow，含中文的句子使用灵小柔。灵小柔使用 MLX 编译和五步推理。对话默认使用 Qwen2.5-1.5B-Instruct 4bit。也可以填写兼容服务接口，参考录音需要该服务支持并提供逐字稿。[MLX Audio](https://github.com/Blaizzy/mlx-audio) · [MLX LM](https://github.com/ml-explore/mlx-lm)
 
 ## 先排练，再连线
 
@@ -18,20 +18,26 @@ Avatar3D Live是 Apple Silicon Mac 上的角色互动直播控制台。观众发
 
 Vidu 组件版公开价为每秒 1 积分，折合每分钟 1.875 元。30 分钟约需 1,800 积分。时限触发后应用发起挂断，实际结算以平台为准。连接中断只尝试恢复原场次，无法查明创建或结束结果时保留待核对记录。应用重启后可以在控制台继续核对。[Vidu S2 参数与计费](https://platform.vidu.cn/vidu-stream/doc/s2-avatar/component/parameters)
 
-## 弹幕、动作与曲库
+## 弹幕、自动播报与曲库
 
-YouTube 使用 YouTube Data API v3。在「设置」保存 API Key 和正在直播的视频 ID，选择仅显示、自动朗读或自动回复。采集器在云端连线期间连接真实聊天，按照平台返回的间隔翻页并过滤重复消息。礼物可以优先进入播出队列，普通消息也有轮次。[YouTube 直播聊天接口](https://developers.google.com/youtube/v3/live/docs/liveChatMessages/list)
+在「设置 → 语音与直播环境」中单选**中文直播**或**英文直播**，本机 MLX 仅加载当前语言对应的单个 TTS 模型（中文用灵小柔、英文用 Willow），两者不会共存。AI 自动欢迎、进房欢迎、礼物答谢与普通弹幕回复均会结合当前语言的 QA 提示词参考生成，并按设定的最小间隔串行播报、互不打断。
 
-其他平台可用有授权的本机采集工具，向「设置 → 复制本机弹幕接入信息」中的 HTTP 地址发送 JSON。请求方法为 `POST`，内容类型为 `application/json`，鉴权头使用 `Authorization: Bearer <接入令牌>`。默认端点为 `http://127.0.0.1:19848/api/ingest`。操作台、舞台与弹幕使用各自的令牌。
+不唱歌时，系统会按间隔轮换参考欢迎句暖场，并在冷却时间满足时偶尔欢迎进房观众（中文模式下自动跳过含英文字母的用户名）。定时唱歌或弹幕点歌期间会自动暂停欢迎与编排动作，并暂存期间收到的礼物，待整首歌唱完并恢复自然神态后再统一答谢观众与礼物（中文模式下对英文用户名仅称呼老板/朋友，不念英文名）。
+
+YouTube 使用 YouTube Data API v3。在「设置」保存 API Key 和正在直播的视频 ID，选择仅显示、自动朗读或自动回复。抖音、TikTok 等平台可用有授权的本机采集工具，向「设置 → 复制本机弹幕接入信息」中的 HTTP 地址发送 JSON（`POST http://127.0.0.1:19848/api/ingest`，`Authorization: Bearer <接入令牌>`）：
 
 | 字段 | 内容 |
 | --- | --- |
-| `id` | 平台的稳定消息 ID，用于过滤重发 |
-| `author` | 实际发送者的显示名 |
-| `text` | 弹幕原文，1 至 600 字 |
-| `gift` | 平台将该事件标记为礼物时传 `true`，省略则按普通消息处理 |
+| `id` | 平台的稳定事件 ID，用于过滤重发 |
+| `platform` | 平台标识：`douyin`、`tiktok`、`youtube` 或 `local`（可省略） |
+| `kind` | 事件类型：`chat`（弹幕）、`gift`（礼物）、`join`（进房）；省略时按 `gift` 字段兼容 |
+| `author` | 实际观众的显示名 |
+| `text` | 弹幕原文或礼物留言（`join` 以及已填 `gift_name` 的 `gift` 可留空） |
+| `gift` | 兼容旧格式：传 `true` 时按礼物处理 |
+| `gift_name` | 礼物名称（如 `玫瑰`、`Rose`、`Super Chat`） |
+| `gift_count` | 礼物数量，默认为 `1` |
 
-「音频与参考图」支持播放音频、给出手持物或服装参考、切换背景及复位姿态。在设置中每行填写一条动作，可在连线后启动循环编排。曲库只收录手动导入的授权文件，每条不超过 32 MiB、10 分钟。启用点播后，观众发送「点歌」与完整曲名即可排入播放队列。
+「音频与参考图」支持播放音频、给出手持物或服装参考、切换背景及复位姿态。在设置中每行填写一条动作，可在连线后启动循环编排。曲库只收录手动导入的授权文件，每条不超过 32 MiB、10 分钟。启用点播后，观众发送「点歌」与完整曲名即可排入播放队列；开启定时自动唱歌后，也会按设定间隔自动轮播曲库。
 
 ## 验证范围
 

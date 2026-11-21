@@ -109,11 +109,16 @@ pub async fn decode(data: &[u8]) -> Result<Bytes> {
     ensure!(out.stdout.len() <= 600 * 48_000, "单条音频最长 10 分钟");
     Ok(out.stdout.into())
 }
-async fn mac_voice(text: &str) -> Result<Vec<u8>> {
+async fn mac_voice(c: &Settings, text: &str) -> Result<Vec<u8>> {
     let tmp = tempfile::Builder::new().suffix(".aiff").tempfile()?;
+    let voice = if c.is_english() {
+        "Samantha"
+    } else {
+        "Tingting"
+    };
     let mut cmd = Command::new("/usr/bin/say");
     cmd.kill_on_drop(true)
-        .args(["-v", "Tingting", "-o"])
+        .args(["-v", voice, "-o"])
         .arg(tmp.path())
         .arg("--")
         .arg(text)
@@ -122,27 +127,45 @@ async fn mac_voice(text: &str) -> Result<Vec<u8>> {
     let status = tokio::time::timeout(Duration::from_secs(65), cmd.status()).await??;
     ensure!(
         status.success(),
-        "系统语音生成失败，请检查 macOS 中文语音安装"
+        if c.is_english() {
+            "系统语音生成失败，请检查 macOS 英文语音安装"
+        } else {
+            "系统语音生成失败，请检查 macOS 中文语音安装"
+        }
     );
     Ok(tokio::fs::read(tmp.path()).await?)
 }
+fn speech_request(c: &Settings, text: &str) -> serde_json::Value {
+    let english = c.is_english();
+    let model = c.active_tts_model();
+    let voice = c.active_tts_voice();
+    let (lang_code, language) = if english {
+        ("en", "english")
+    } else {
+        ("z", "chinese")
+    };
+    let mut body = json!({
+        "model":model,"input":text,"response_format":"wav","lang_code":lang_code,
+        "language":language
+    });
+    if !voice.trim().is_empty() {
+        body["voice"] = json!(voice);
+    }
+    if !c.reference_audio.is_empty() {
+        body["ref_audio"] = json!(c.reference_audio);
+        body["ref_text"] = json!(c.reference_text);
+    }
+    body
+}
+
 pub async fn synth(http: &reqwest::Client, c: &Settings, text: &str) -> Result<Bytes> {
     let audio = if c.tts_mode == "system" {
-        mac_voice(text).await?
+        mac_voice(c, text).await?
     } else {
-        let mut body = json!({"model":c.tts_model,"input":text,"response_format":"wav","lang_code":"z",
-            "language":"chinese"});
-        if !c.voice.trim().is_empty() {
-            body["voice"] = json!(c.voice);
-        }
-        if !c.reference_audio.is_empty() {
-            body["ref_audio"] = json!(c.reference_audio);
-            body["ref_text"] = json!(c.reference_text);
-        }
         let resp = http
             .post(&c.tts_endpoint)
             .timeout(Duration::from_secs(120))
-            .json(&body)
+            .json(&speech_request(c, text))
             .send()
             .await
             .map_err(|e| anyhow!("无法连接语音服务：{}", e.without_url()))?;
@@ -168,6 +191,38 @@ pub fn wav(pcm: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routes_strictly_by_live_language_without_mixing() {
+        let mut zh = Settings::default();
+        zh.live_language = "zh".into();
+        for text in ["欢迎来到直播间！", "Welcome to the livestream!", "123"] {
+            let body = speech_request(&zh, text);
+            assert_eq!(body["model"], zh.tts_model);
+            assert_eq!(body["voice"], "灵小柔");
+            assert_eq!(body["lang_code"], "z");
+        }
+
+        let mut en = Settings::default();
+        en.live_language = "en".into();
+        for text in ["Welcome to the livestream!", "欢迎来到直播间！", "123"] {
+            let body = speech_request(&en, text);
+            assert_eq!(body["model"], en.tts_model_en);
+            assert_eq!(body["voice"], "willow");
+            assert_eq!(body["lang_code"], "en");
+        }
+    }
+
+    #[test]
+    fn custom_reference_audio_follows_selected_language() {
+        let mut c = Settings::default();
+        c.live_language = "en".into();
+        c.reference_audio = "/audio/reference.wav".into();
+        c.reference_text = "Welcome.".into();
+        let body = speech_request(&c, "Welcome.");
+        assert_eq!(body["model"], c.tts_model_en);
+        assert_eq!(body["ref_audio"], c.reference_audio);
+    }
 
     #[test]
     fn wav_clock_agrees_with_wire_frame_duration() {

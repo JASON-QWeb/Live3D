@@ -90,7 +90,7 @@ function syncKeys(keys) {
     badge.className = keys[name] ? "key-badge is-set" : "key-badge";
     badge.textContent = keys[name] ? "已配置" : "未配置";
     head.append(label, badge);
-    input.placeholder = "保存到 macOS 钥匙串";
+    input.placeholder = "保存到项目 .env";
     button.type = "button";
     button.textContent = "保存";
     button.onclick = async () => {
@@ -114,7 +114,7 @@ function syncKeys(keys) {
       clear.type = "button";
       clear.textContent = "移除";
       clear.onclick = async () => {
-        if (!(await confirmAction("移除凭据", "从 Avatar3D 的钥匙串条目中移除此密钥。", "移除"))) return;
+        if (!(await confirmAction("移除凭据", "从项目 .env 文件中移除此密钥。", "移除"))) return;
         try {
           await api("/api/key/" + name, { value: "" }, "PUT");
           await refreshKeys();
@@ -136,6 +136,14 @@ async function refreshKeys() {
   onUpdate();
 }
 
+function syncLanguageUI(lang) {
+  const isEn = lang === "en";
+  document.querySelectorAll(".lang-zh").forEach((n) => (n.hidden = isEn));
+  document.querySelectorAll(".lang-en").forEach((n) => (n.hidden = !isEn));
+  const chip = el("langChip");
+  if (chip) chip.textContent = isEn ? "英文直播 · EN" : "中文直播 · ZH";
+}
+
 export async function loadConfig() {
   const d = await api("/api/config");
   configuration = d;
@@ -147,6 +155,7 @@ export async function loadConfig() {
     else if (Array.isArray(v)) input.value = v.join("\n");
     else input.value = v;
   }
+  syncLanguageUI(d.settings.live_language || "zh");
   syncKeys(d.keys);
   el("dataPath").textContent = d.data_dir;
   const imgStatus = el("imageStatus");
@@ -163,9 +172,9 @@ export async function voiceStatus() {
     const vs = el("voiceState");
     const ms = el("modelState");
     vs.textContent = "本机语音 · " + v.message;
-    vs.classList.toggle("is-ready", /已就绪/.test(v.message));
+    vs.classList.toggle("is-ready", /^已就绪/.test(v.message));
     ms.textContent = "本机对话 · " + m.message;
-    ms.classList.toggle("is-ready", /已就绪/.test(m.message));
+    ms.classList.toggle("is-ready", /^已就绪/.test(m.message));
   } catch (e) {
     const vs = el("voiceState");
     vs.textContent = e.message;
@@ -176,9 +185,11 @@ export async function voiceStatus() {
 export function setupConfig(updated) {
   onUpdate = updated;
   el("settings").addEventListener("submit", (e) => e.preventDefault());
+  el("liveLanguage")?.addEventListener("change", (e) => syncLanguageUI(e.target.value));
   action("save", async () => {
     const form = el("settings");
     if (!form.reportValidity()) return;
+    const prevLang = configuration.settings.live_language;
     const c = { ...configuration.settings };
     for (const k of Object.keys(c)) {
       const field = form.elements.namedItem(k);
@@ -194,7 +205,12 @@ export function setupConfig(updated) {
     }
     await api("/api/config", c, "PUT");
     await loadConfig();
-    notify("设置已保存");
+    await voiceStatus();
+    notify(
+      prevLang !== c.live_language
+        ? "已切换直播语言环境，旧语言语音服务已停止，请点击「启动本机 MLX」加载新语言"
+        : "设置已保存",
+    );
   });
   el("image").onchange = async (e) => {
     const f = e.target.files[0];
@@ -251,7 +267,7 @@ export function setupConfig(updated) {
     btn.textContent = "已复制弹幕接入信息";
     clearTimeout(ingestTimer);
     ingestTimer = setTimeout(() => {
-      btn.textContent = "复制本机弹幕接入信息";
+      btn.textContent = "复制本机弹幕接入信息（抖音/TikTok/YouTube）";
     }, 1800);
     notify("已复制弹幕入口和专用令牌");
   });

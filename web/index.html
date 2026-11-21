@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f5f5f7" />
     <meta name="description" content="Avatar3D Live 本机角色互动直播控制台：实时监看画面、播音调度、弹幕互动与 OBS 场景集成。" />
     <title>Avatar3D · 直播控制台</title>
-    <link rel="icon" type="image/svg+xml" href="/mark.svg" />
+    <link rel="icon" type="image/svg+xml" href="/mark.svg?v=2" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
@@ -24,6 +24,7 @@
           <button class="tab" data-tab="config">设置</button>
         </nav>
         <div class="top-state" role="status" aria-live="polite">
+          <span class="lang-chip" id="langChip">中文直播</span>
           <i id="lamp" aria-hidden="true"></i>
           <span id="phase">连接本机中</span>
         </div>
@@ -35,7 +36,7 @@
         <div class="heading">
           <div class="heading-copy">
             <h1 id="desk-title">直播控制台</h1>
-            <p class="heading-sub">实时监看角色画面、调度中文播音与舞台动作。</p>
+            <p class="heading-sub">实时监看角色画面、自动欢迎与定时演唱调度、抖音 / TikTok / YouTube 互动。</p>
           </div>
           <div class="actions">
             <button id="copyStage" class="btn-pill-secondary">
@@ -278,10 +279,15 @@
                 <div class="tool-row">
                   <label class="file-button">
                     导入授权音频
-                    <input type="file" id="addTrack" accept="audio/*,video/mp4" />
+                    <input type="file" id="addTrack" accept="audio/*,video/mp4" multiple />
                   </label>
                   <select id="tracks" aria-label="曲库" class="track-select"></select>
                 </div>
+                <div id="trackImportStatus" class="meta" role="status" hidden></div>
+                <details id="trackImportErrors" class="sub-disclosure" hidden>
+                  <summary>查看导入失败的文件</summary>
+                  <ul></ul>
+                </details>
                 <div class="tool-row">
                   <button id="playTrack">点播</button>
                   <button id="removeTrack">移除曲目</button>
@@ -316,6 +322,30 @@
                 <span class="empty-events-text">暂无直播事件</span>
               </div>
             </div>
+
+            <details class="sub-disclosure sim-box">
+              <summary>模拟观众事件（抖音 / TikTok / YouTube）</summary>
+              <div class="sub-fields sim-fields">
+                <div class="sim-row">
+                  <select id="simPlatform" aria-label="模拟平台">
+                    <option value="douyin">抖音</option>
+                    <option value="tiktok">TikTok</option>
+                    <option value="youtube">YouTube</option>
+                  </select>
+                  <input id="simAuthor" value="小明" placeholder="用户名（如 小明 / Mike）" aria-label="模拟用户名" />
+                </div>
+                <div class="sim-row">
+                  <input id="simGift" value="玫瑰" placeholder="礼物名称" aria-label="模拟礼物名称" />
+                  <input id="simCount" type="number" min="1" max="999" value="1" class="sim-count" aria-label="模拟礼物数量" />
+                </div>
+                <input id="simText" placeholder="弹幕内容或礼物留言（可选）" aria-label="模拟弹幕内容" />
+                <div class="tool-row">
+                  <button type="button" id="simJoin">模拟进房</button>
+                  <button type="button" id="simGiftBtn">模拟送礼</button>
+                  <button type="button" id="simChat">模拟弹幕</button>
+                </div>
+              </div>
+            </details>
           </section>
         </div>
       </section>
@@ -423,22 +453,24 @@
               </span>
               <button type="button" id="startModel" class="btn-chip">启动本机对话</button>
             </div>
-            <h2 id="h-interact">互动与弹幕</h2>
-            <p class="cell-desc">连接本机或自有语言模型，配置角色人设与 YouTube 实时弹幕处理策略。</p>
+            <h2 id="h-interact">互动、自动播报与弹幕</h2>
+            <p class="cell-desc">配置 AI 角色人设、QA 提示词参考、自动欢迎/定时唱歌调度与抖音 / TikTok / YouTube 互动策略。</p>
 
             <div class="fields">
               <div class="service-banner" id="modelState"></div>
-              <label>
-                <span>语言模型接口</span>
-                <input name="llm_endpoint" type="url" placeholder="完整的 chat/completions 地址" />
-              </label>
-              <label>
-                <span>语言模型名称</span>
-                <input name="llm_model" />
-              </label>
+              <div class="pair">
+                <label>
+                  <span>语言模型接口</span>
+                  <input name="llm_endpoint" type="url" placeholder="完整的 chat/completions 地址" />
+                </label>
+                <label>
+                  <span>语言模型名称</span>
+                  <input name="llm_model" />
+                </label>
+              </div>
               <label>
                 <span>角色说话方式</span>
-                <textarea name="persona" rows="3"></textarea>
+                <textarea name="persona" rows="2"></textarea>
               </label>
               <div class="pair">
                 <label>
@@ -446,7 +478,7 @@
                   <input name="youtube_video" maxlength="11" placeholder="11 位视频 ID" />
                 </label>
                 <label>
-                  <span>收到弹幕后</span>
+                  <span>收到普通弹幕后</span>
                   <select name="audience_mode">
                     <option value="review">仅显示，由主播处理</option>
                     <option value="read">自动朗读</option>
@@ -454,12 +486,88 @@
                   </select>
                 </label>
               </div>
+
               <div class="toggle-group">
+                <label class="check">
+                  <input type="checkbox" name="auto_welcome" />
+                  <span>不唱歌时定时欢迎</span>
+                </label>
+                <label class="check">
+                  <input type="checkbox" name="welcome_joins" />
+                  <span>进房偶尔欢迎（中文跳过英文名）</span>
+                </label>
+                <label class="check">
+                  <input type="checkbox" name="auto_thank_gifts" />
+                  <span>自动 AI 谢礼（唱歌时唱完统一谢）</span>
+                </label>
+                <label class="check">
+                  <input type="checkbox" name="auto_sing" />
+                  <span>定时自动唱歌</span>
+                </label>
                 <label class="check">
                   <input type="checkbox" name="song_requests" />
                   <span>接受弹幕「点歌 曲名」</span>
                 </label>
               </div>
+
+              <div class="pair">
+                <label>
+                  <span>行为间最小间隔（秒）</span>
+                  <input type="number" name="utterance_gap" min="1" max="60" required />
+                </label>
+                <label>
+                  <span>定时欢迎间隔（秒）</span>
+                  <input type="number" name="ambient_welcome_gap" min="10" max="600" required />
+                </label>
+              </div>
+              <div class="pair">
+                <label>
+                  <span>进房欢迎冷却（秒）</span>
+                  <input type="number" name="join_welcome_gap" min="5" max="300" required />
+                </label>
+                <label>
+                  <span>定时唱歌间隔（秒）</span>
+                  <input type="number" name="auto_sing_gap" min="15" max="3600" required />
+                </label>
+              </div>
+
+              <details class="sub-disclosure">
+                <summary>QA 提示词参考、欢迎词与唱歌神态</summary>
+                <div class="sub-fields">
+                  <label class="lang-zh">
+                    <span>中文 QA 提示词参考（自动附带给 AI）</span>
+                    <textarea name="qa_reference" rows="5"></textarea>
+                  </label>
+                  <label class="lang-en" hidden>
+                    <span>English QA Reference (attached to AI prompts)</span>
+                    <textarea name="qa_reference_en" rows="5"></textarea>
+                  </label>
+                  <label class="lang-zh">
+                    <span>不唱歌时定时欢迎参考句（每行一句）</span>
+                    <textarea name="welcome_phrases" rows="3"></textarea>
+                  </label>
+                  <label class="lang-en" hidden>
+                    <span>Periodic welcome phrases between songs (one per line)</span>
+                    <textarea name="welcome_phrases_en" rows="3"></textarea>
+                  </label>
+                  <label class="lang-zh">
+                    <span>唱歌神态自然引导（留空则完全由 Vidu 自由发挥）</span>
+                    <input name="singing_action" placeholder="例如：自然投入地唱歌，高潮处自然闭眼陶醉" />
+                  </label>
+                  <label class="lang-en" hidden>
+                    <span>Singing demeanor guide (leave blank for Vidu auto)</span>
+                    <input name="singing_action_en" />
+                  </label>
+                  <label class="lang-zh">
+                    <span>唱完后神态衔接（留空则自然衔接）</span>
+                    <input name="post_sing_action" placeholder="例如：唱完歌微笑看向镜头，神态温柔放松" />
+                  </label>
+                  <label class="lang-en" hidden>
+                    <span>Post-song demeanor transition</span>
+                    <input name="post_sing_action_en" />
+                  </label>
+                </div>
+              </details>
             </div>
           </section>
 
@@ -473,11 +581,18 @@
               </span>
               <button type="button" id="startVoice" class="btn-chip">启动本机 MLX</button>
             </div>
-            <h2 id="h-voice">语音</h2>
-            <p class="cell-desc">管理本机 MLX 语音合成或系统试听音色。</p>
+            <h2 id="h-voice">语音与直播环境</h2>
+            <p class="cell-desc">选择单一直播语言环境，中文与英文 TTS 不会共存，仅加载当前语言的语音模型。</p>
 
             <div class="fields">
               <div class="service-banner" id="voiceState"></div>
+              <label>
+                <span>直播语言环境（单选）</span>
+                <select name="live_language" id="liveLanguage">
+                  <option value="zh">中文直播（仅启用中文 TTS · 灵小柔）</option>
+                  <option value="en">英文直播（仅启用英文 TTS · Willow）</option>
+                </select>
+              </label>
               <label>
                 <span>语音来源</span>
                 <select name="tts_mode">
@@ -489,16 +604,24 @@
                 <span>语音接口</span>
                 <input name="tts_endpoint" type="url" />
               </label>
-              <label>
-                <span>语音模型</span>
+              <label class="lang-zh">
+                <span>中文模型</span>
                 <input name="tts_model" />
               </label>
-              <label>
-                <span>音色</span>
+              <label class="lang-zh">
+                <span>中文音色</span>
                 <input name="voice" />
               </label>
+              <label class="lang-en" hidden>
+                <span>英文模型</span>
+                <input name="tts_model_en" />
+              </label>
+              <label class="lang-en" hidden>
+                <span>英文音色</span>
+                <input name="voice_en" />
+              </label>
               <details class="sub-disclosure">
-                <summary>授权参考音色</summary>
+                <summary>兼容服务参考音色</summary>
                 <div class="sub-fields">
                   <label>
                     <span>录音在语音服务上的路径</span>
@@ -522,10 +645,10 @@
                   <path d="M8.5 8.5L14.5 2.5M12.25 4.75l2 2M14.25 2.75l1.5 1.5" />
                 </svg>
               </span>
-              <span class="audit-pill"><i aria-hidden="true"></i>钥匙串加密</span>
+              <span class="audit-pill"><i aria-hidden="true"></i>本地 .env</span>
             </div>
-            <h2 id="h-keys">连接凭据</h2>
-            <p class="cell-desc">所有 API 密钥均加密保存在 macOS 本机钥匙串。</p>
+            <h2 id="h-keys">连接凭据与三平台接入</h2>
+            <p class="cell-desc">API 密钥保存在 .env；抖音 / TikTok / YouTube 外部采集端统一推送至 /api/ingest。</p>
 
             <div class="fields" id="keys"></div>
 
@@ -534,7 +657,7 @@
                 <button id="checkVidu" type="button">核对 Vidu 余额</button>
                 <span class="meta" id="balance"></span>
               </div>
-              <button id="copyIngest" type="button" class="btn-full-subtle">复制本机弹幕接入信息</button>
+              <button id="copyIngest" type="button" class="btn-full-subtle">复制本机弹幕接入信息（抖音/TikTok/YouTube）</button>
             </div>
           </section>
 

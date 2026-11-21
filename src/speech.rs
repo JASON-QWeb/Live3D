@@ -1,19 +1,28 @@
 use crate::{
     audio,
     config::now,
-    dialogue,
+    dialogue::{self, PromptKind},
     session::Run,
     state::{App, lock},
-    wire::{Command, Packet},
+    wire::{self, Command, Packet},
 };
 use anyhow::{Context, Result, ensure};
 use bytes::Bytes;
-use std::{sync::Arc, time::Duration};
+use serde_json::json;
+use std::{
+    sync::{Arc, atomic::Ordering},
+    time::Duration,
+};
 use tokio::{sync::mpsc, time::Instant};
 
 pub enum Job {
     Speak(String),
     Reply(String),
+    AutoReply {
+        kind: PromptKind,
+        prompt: String,
+        label: String,
+    },
     Media(Bytes, String),
     Track(uuid::Uuid),
 }
@@ -28,7 +37,7 @@ pub fn enqueue(app: &App, job: Job) -> Result<()> {
     enqueue_in(app, &run, job, false)
 }
 pub fn enqueue_in(app: &App, run: &Run, job: Job, priority: bool) -> Result<()> {
-    if matches!(&job, Job::Speak(_) | Job::Reply(_)) {
+    if matches!(&job, Job::Speak(_) | Job::Reply(_) | Job::AutoReply { .. }) {
         ensure!(
             app.config().tts_mode != "system",
             "系统音色用于本机试听。实播请选择 MLX、授权语音服务或录音"
@@ -88,7 +97,7 @@ async fn reply(app: &App, run: &Run, o: u64, at: &mut Option<u64>, text: &str) -
     let c = app.config();
     let (tx, mut rx) = mpsc::channel(6);
     let history = lock(&run.history).iter().cloned().collect::<Vec<_>>();
-    let produce = dialogue::sentences(&app.http, &c, text, &history, tx);
+    let produce = dialogue::sentences(&app.http, &c, PromptKind::Chat, text, &history, tx);
     let mut answer = String::new();
     let play = async {
         while let Some(line) = rx.recv().await {
@@ -106,6 +115,110 @@ async fn reply(app: &App, run: &Run, o: u64, at: &mut Option<u64>, text: &str) -
     history.push_back((text.into(), answer));
     Ok(())
 }
+async fn auto_reply(
+    app: &App,
+    run: &Run,
+    o: u64,
+    at: &mut Option<u64>,
+    kind: PromptKind,
+    prompt: &str,
+    label: &str,
+) -> Result<()> {
+    let c = app.config();
+    let (tx, mut rx) = mpsc::channel(6);
+    let produce = dialogue::sentences(&app.http, &c, kind, prompt, &[], tx);
+    let mut answer = String::new();
+    let play = async {
+        while let Some(line) = rx.recv().await {
+            answer.push_str(&line);
+            let pcm = audio::synth(&app.http, &c, &line).await?;
+            stream_pcm(app, run, o, at, pcm, line).await?;
+        }
+        Ok::<_, anyhow::Error>(())
+    };
+    tokio::try_join!(produce, play)?;
+    app.event(label, answer);
+    Ok(())
+}
+async fn play_track(app: &App, run: &Run, o: u64, at: &mut Option<u64>, id: uuid::Uuid) -> Result<()> {
+    let title = crate::library::list(app)?
+        .into_iter()
+        .find(|t| t.id == id)
+        .map(|t| t.title)
+        .unwrap_or_else(|| "当前曲目".into());
+    let pcm = crate::library::audio(app, id).await?;
+    let cfg = app.config();
+
+    {
+        // Lock song_gifts briefly when entering singing state for strict ordering with gift buffering.
+        let _g = lock(&run.song_gifts);
+        run.singing.store(true, Ordering::SeqCst);
+    }
+    {
+        let mut v = lock(&app.view);
+        v.singing = true;
+        v.current_song = title.clone();
+    }
+
+    let sing_act = cfg.active_singing_action().trim();
+    if !sing_act.is_empty() {
+        send(run, o, Command::Signal(9, wire::text_msg(sing_act))).await?;
+        app.event("唱歌", format!("开始演唱《{title}》· {sing_act}"));
+        tokio::time::sleep(Duration::from_millis(400)).await;
+    } else {
+        app.event("唱歌", format!("开始演唱《{title}》"));
+    }
+
+    stream_pcm(app, run, o, at, pcm, String::new()).await?;
+
+    // Song finished: atomically leave singing state and collect all gifts received during the song.
+    let buffered_gifts = {
+        let mut g = lock(&run.song_gifts);
+        let drained = std::mem::take(&mut *g);
+        run.singing.store(false, Ordering::SeqCst);
+        drained
+    };
+    {
+        let mut v = lock(&app.view);
+        v.singing = false;
+        v.current_song.clear();
+    }
+    run.last_song_end_ms.store(now(), Ordering::Relaxed);
+
+    let post_act = cfg.active_post_sing_action().trim();
+    if !post_act.is_empty() {
+        send(run, o, Command::Signal(9, wire::text_msg(post_act))).await?;
+    } else if !sing_act.is_empty() {
+        send(run, o, Command::Signal(15, json!({}))).await?;
+    }
+
+    // Keep an explicit pause between finishing the song and starting post-song thanks.
+    let gap = cfg.utterance_gap as u64;
+    if gap > 0 {
+        tokio::time::sleep(Duration::from_secs(gap)).await;
+    }
+
+    if cfg.tts_mode != "system" {
+        let prompt = crate::director::build_post_song_thanks_prompt(&cfg, &title, &buffered_gifts);
+        let label = if buffered_gifts.is_empty() {
+            "唱完谢幕"
+        } else {
+            "唱完谢礼"
+        };
+        let mut thanks_at = Some(now());
+        auto_reply(
+            app,
+            run,
+            o,
+            &mut thanks_at,
+            PromptKind::PostSongThanks,
+            &prompt,
+            label,
+        )
+        .await?;
+    }
+    Ok(())
+}
 async fn play(app: &App, run: &Run, o: Offer) -> Result<()> {
     let mut first = Some(o.at);
     match o.job {
@@ -114,10 +227,12 @@ async fn play(app: &App, run: &Run, o: Offer) -> Result<()> {
             stream_pcm(app, run, o.epoch, &mut first, pcm, s).await?;
         }
         Job::Reply(s) => reply(app, run, o.epoch, &mut first, &s).await?,
-        Job::Track(id) => {
-            let pcm = crate::library::audio(app, id).await?;
-            stream_pcm(app, run, o.epoch, &mut first, pcm, String::new()).await?;
-        }
+        Job::AutoReply {
+            kind,
+            prompt,
+            label,
+        } => auto_reply(app, run, o.epoch, &mut first, kind, &prompt, &label).await?,
+        Job::Track(id) => play_track(app, run, o.epoch, &mut first, id).await?,
         Job::Media(pcm, s) => stream_pcm(app, run, o.epoch, &mut first, pcm, s).await?,
     }
     lock(&app.view).metrics.utterances += 1;
@@ -157,17 +272,58 @@ pub async fn worker(
         if *changes.borrow_and_update() != o.epoch {
             continue;
         }
+        run.busy.store(true, Ordering::SeqCst);
         lock(&app.view).voice_busy = true;
+        let mut interrupted = false;
+        let mut stopped = false;
         tokio::select! {
             biased;
-            _ = run.stop.cancelled() => break,
-            _ = changes.changed() => (),
+            _ = run.stop.cancelled() => {
+                stopped = true;
+            }
+            _ = changes.changed() => {
+                interrupted = true;
+            }
             result = play(&app, &run, o) => {
                 if let Err(e) = result {
                     app.event("播出错误", e.to_string());
                 }
             }
         }
-        lock(&app.view).voice_busy = false;
+        {
+            let mut g = lock(&run.song_gifts);
+            run.singing.store(false, Ordering::SeqCst);
+            if interrupted || stopped {
+                g.clear();
+            }
+        }
+        {
+            let mut v = lock(&app.view);
+            v.voice_busy = false;
+            v.singing = false;
+            v.current_song.clear();
+        }
+        run.last_activity_ms.store(now(), Ordering::Relaxed);
+        crate::choreo::hold(&app, &run);
+        if stopped {
+            run.busy.store(false, Ordering::SeqCst);
+            break;
+        }
+        // Keep a mandatory quiet interval between consecutive utterances/behaviors.
+        if !interrupted {
+            let gap = app.config().utterance_gap as u64;
+            if gap > 0 {
+                tokio::select! {
+                    biased;
+                    _ = run.stop.cancelled() => {
+                        run.busy.store(false, Ordering::SeqCst);
+                        break;
+                    }
+                    _ = changes.changed() => (),
+                    _ = tokio::time::sleep(Duration::from_secs(gap)) => (),
+                }
+            }
+        }
+        run.busy.store(false, Ordering::SeqCst);
     }
 }

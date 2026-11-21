@@ -39,7 +39,11 @@ pub async fn worker(app: App, run: Arc<Run>) {
             _ = tokio::time::sleep(Duration::from_millis(300)), if *on.borrow() => {
                 let config = app.config();
                 if now() < run.next_action.load(Ordering::Relaxed)
-                    || config.actions.is_empty() || lock(&app.view).phase != "live" {
+                    || config.actions.is_empty()
+                    || run.singing.load(Ordering::Relaxed)
+                    || run.busy.load(Ordering::Relaxed)
+                    || lock(&app.view).phase != "live"
+                {
                     continue;
                 }
                 let line = &config.actions[next % config.actions.len()];

@@ -80,6 +80,7 @@ pub fn routes() -> Router<App> {
         .route("/api/monitor", get(monitor))
         .route("/api/output", post(screen))
         .route("/api/ingest", post(incoming))
+        .route("/api/simulate", post(simulate))
         .route("/api/recording", post(recording))
         .route("/api/quit", post(quit))
         .route("/sdk/trtc.js", get(sdk))
@@ -102,8 +103,12 @@ async fn update(State(app): S, Json(c): Json<Settings>) -> Api<Json<Value>> {
     let _g = app.gate.lock().await;
     busy(&app)?;
     c.validate()?;
+    let lang_changed = app.config().live_language != c.live_language;
     config::write_json(&app.dir.join("settings.json"), &c)?;
     *lock(&app.conf) = c;
+    if lang_changed {
+        services::ModelService::Voice.stop(&app).await;
+    }
     Ok(ok())
 }
 #[derive(Deserialize)]
@@ -245,6 +250,34 @@ async fn incoming(State(app): S, Json(q): Json<audience::Incoming>) -> Api<Json<
     Ok(Json(json!({"accepted":audience::receive(&app,q,"local")?})))
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SimulatedEvent {
+    #[serde(default)]
+    platform: Option<String>,
+    kind: String,
+    author: String,
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    gift_name: Option<String>,
+    #[serde(default)]
+    gift_count: Option<u32>,
+}
+async fn simulate(State(app): S, Json(q): Json<SimulatedEvent>) -> Api<Json<Value>> {
+    let gift = q.kind.trim() == "gift";
+    let event = audience::Incoming {
+        id: format!("sim-{}", uuid::Uuid::new_v4()),
+        author: q.author,
+        text: q.text,
+        gift,
+        kind: Some(q.kind),
+        platform: q.platform,
+        gift_name: q.gift_name,
+        gift_count: q.gift_count,
+    };
+    Ok(Json(json!({"accepted":audience::receive(&app,event,"simulate")?})))
+}
+#[derive(Deserialize)]
 struct Recording {
     id: String,
 }
@@ -306,7 +339,14 @@ async fn reply_preview(State(app): S, Json(q): Json<Words>) -> Api<Response> {
     let line = text(&q.text, 500)?;
     let cfg = app.config();
     let (tx, mut rx) = tokio::sync::mpsc::channel(8);
-    let generate = crate::dialogue::sentences(&app.http, &cfg, &line, &[], tx);
+    let generate = crate::dialogue::sentences(
+        &app.http,
+        &cfg,
+        crate::dialogue::PromptKind::Chat,
+        &line,
+        &[],
+        tx,
+    );
     let speak = async {
         let mut pcm = Vec::new();
         while let Some(line) = rx.recv().await {
