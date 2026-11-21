@@ -1,5 +1,6 @@
 use crate::{
     config::{self, Settings, Tokens, now},
+    prompt_store,
     session::Run,
 };
 use anyhow::Result;
@@ -30,12 +31,23 @@ pub struct Metrics {
     pub reconnects: u32,
     pub inputs: u32,
     pub last_first_audio_ms: Option<u64>,
+    pub last_reply: Option<ReplyMetrics>,
     pub first_frame_ms: Option<u64>,
     pub billed_seconds: Option<u64>,
     pub credits: Option<f64>,
     pub output_fps: Option<f64>,
     pub output_width: Option<u64>,
     pub output_height: Option<u64>,
+}
+
+#[derive(Clone, Default, Serialize)]
+pub struct ReplyMetrics {
+    pub source: &'static str,
+    pub queue_ms: Option<u64>,
+    pub tts_ms: Option<u64>,
+    pub first_audio_ms: Option<u64>,
+    #[serde(flatten)]
+    pub generation: crate::dialogue::GenerationStats,
 }
 #[derive(Clone, Default, Serialize)]
 pub struct View {
@@ -56,6 +68,7 @@ pub struct View {
     pub current_song: String,
     pub bgm_playing: bool,
     pub current_bgm: String,
+    pub bgm_status: String,
     pub choreo: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -90,6 +103,7 @@ pub struct Inner {
     pub dir: PathBuf,
     pub tokens: Tokens,
     pub conf: Mutex<Settings>,
+    pub prompts: prompt_store::Store,
     pub view: Mutex<View>,
     pub screen: Mutex<Screen>,
     pub run: Mutex<Option<Arc<Run>>>,
@@ -109,6 +123,8 @@ pub type App = Arc<Inner>;
 impl Inner {
     pub fn new(dir: PathBuf) -> Result<App> {
         config::prepare_dir(&dir)?;
+        let (conf, legacy) = config::load_settings(&dir)?;
+        let prompts = prompt_store::Store::new(&dir, &conf.prompt_profile, &legacy)?;
         let pending = dir.join("open-session.json").exists();
         let view = View {
             phase: if pending { "unconfirmed" } else { "idle" }.into(),
@@ -122,7 +138,8 @@ impl Inner {
         };
         let (stage_tx, _) = tokio::sync::broadcast::channel(32);
         Ok(Arc::new(Self {
-            conf: Mutex::new(config::load_settings(&dir)?),
+            conf: Mutex::new(conf),
+            prompts,
             tokens: Tokens::load(&dir)?,
             dir,
             view: Mutex::new(view),
@@ -176,6 +193,7 @@ impl Inner {
         let mut v = lock(&self.view).clone();
         if now().saturating_sub(lock(&self.screen).seen) > 12_000 {
             v.output.clear();
+            v.bgm_status.clear();
         }
         if v.subtitle_until < now() {
             v.subtitle.clear();

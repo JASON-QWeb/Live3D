@@ -16,63 +16,200 @@ pub const MING: &str = "jorgepb96/Ming-3.0-tts-0.5B-4bit";
 pub const ZONOS: &str = "mlx-community/ZONOS3-Mini";
 pub const MING_VOICE: &str = "灵小柔";
 pub const ZONOS_VOICE: &str = "willow";
-const PREVIOUS_PERSONA: &str = "用简短自然的中文回应直播观众，输出适合朗读的正文。涉及价格、库存或现场情况时，仅依据提供的信息。";
-const DEFAULT_PERSONA: &str = "你是深夜录音房里的温柔陪聊兼唱歌主播灵小柔，性格亲切自然。用简短口语化的方式回应直播观众，输出直接适合朗读的正文。涉及价格、库存或现场情况时，仅依据提供的信息。";
-const FALLBACK_QA_ZH: &str = "\
-Q：有新观众进入直播间，比如提示某位用户进入直播间时怎么回应？
-A：直接自然叫出名字打个招呼就行，比如：欢迎某某，欢迎某某进入直播间。
+pub fn qa_file_path(is_english: bool) -> Option<PathBuf> {
+    let root = find_project_root()?;
+    Some(root.join(if is_english {
+        "avatars/en/knowledge_base.txt"
+    } else {
+        "avatars/cn/xiaorou_knowledge_base.txt"
+    }))
+}
 
-Q：系统提示某某进入直播间时，如果正在聊天或人数较多怎么自然欢迎？
-A：偶尔顺嘴说一句“欢迎某某”即可，简洁自然，不要每条进房提示都机械重复。
+pub fn song_titles_file_path(is_english: bool) -> Option<PathBuf> {
+    let root = find_project_root()?;
+    Some(root.join(if is_english {
+        "avatars/en/song_titles.txt"
+    } else {
+        "avatars/cn/song_titles.txt"
+    }))
+}
 
-Q：观众说这首歌好好听、唱得真好听怎么回应？
-A：谢谢，觉得好听可以点个关注。
+fn strip_audio_ext(s: &str) -> &str {
+    let trimmed = s.trim().trim_start_matches('\u{feff}').trim();
+    const EXTS: [&str; 9] = [
+        ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".mp4", ".mov",
+    ];
+    let lower = trimmed.to_ascii_lowercase();
+    for ext in EXTS {
+        if lower.ends_with(ext) && trimmed.len() > ext.len() {
+            return trimmed[..trimmed.len() - ext.len()].trim();
+        }
+    }
+    trimmed
+}
 
-Q：观众送了小心心、点赞、玫瑰、灯牌等小礼物怎么感谢？
-A：谢谢宝子送的礼物，谢谢老板。
+fn strip_cover_suffix(s: &str) -> &str {
+    let mut cur = s.trim();
+    const SUFFIXES: [&str; 7] = [
+        "－小柔演唱",
+        "-小柔演唱",
+        "—小柔演唱",
+        "_小柔演唱",
+        "（小柔演唱）",
+        "(小柔演唱)",
+        "小柔演唱",
+    ];
+    loop {
+        let mut changed = false;
+        for suf in SUFFIXES {
+            if let Some(rest) = cur.strip_suffix(suf) {
+                let next = rest
+                    .trim_end_matches(|c: char| {
+                        c.is_whitespace() || matches!(c, '-' | '－' | '—' | '–' | '_' | '·')
+                    })
+                    .trim();
+                if !next.is_empty() {
+                    cur = next;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    cur
+}
 
-Q：观众送了跑车、火箭、嘉年华、城堡等贵重礼物或连续刷礼物怎么感谢？
-A：感谢老板送的大礼！";
+fn normalize_song_key(raw: &str) -> String {
+    let base = strip_cover_suffix(strip_audio_ext(raw));
+    let mut out = String::with_capacity(base.len());
+    let mut prev_space = false;
+    for ch in base.chars() {
+        if ch.is_whitespace() {
+            if !prev_space && !out.is_empty() {
+                out.push(' ');
+                prev_space = true;
+            }
+        } else {
+            out.push(ch.to_ascii_lowercase());
+            prev_space = false;
+        }
+    }
+    out.trim().to_owned()
+}
 
-fn default_qa_zh() -> String {
-    if let Some(root) = find_project_root() {
-        let path = root.join("avatars/cn/xiaorou_knowledge_base.txt");
-        if let Ok(text) = fs::read_to_string(&path) {
-            let trimmed = text.trim();
-            if !trimmed.is_empty() && trimmed.len() <= 32_000 {
-                return trimmed.to_owned();
+fn split_song_mapping_line(line: &str) -> Option<(&str, &str)> {
+    let trimmed = line.trim().trim_start_matches('\u{feff}').trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with("//") {
+        return None;
+    }
+    for sep in ["=>", "->", "=", "＝", "\t"] {
+        if let Some((k, v)) = trimmed.split_once(sep) {
+            let key = k.trim();
+            let val = v.trim();
+            if !key.is_empty() && !val.is_empty() {
+                return Some((key, val));
             }
         }
     }
-    FALLBACK_QA_ZH.into()
-}
-const DEFAULT_QA_EN: &str = "\
-Q: How should I greet a viewer who just joined the livestream?
-A: Greet them warmly and naturally by name in one short sentence, like welcoming them in to relax and listen to some songs.
-
-Q: What should I say during a quiet moment when I am not singing?
-A: Welcome everyone to the livestream naturally and invite new viewers to say hi or relax with some music.
-
-Q: How should I thank viewers for gifts?
-A: Thank them warmly and sincerely in one or two short sentences. For bigger gifts, sound extra excited and appreciative.
-
-Q: What should I say right after finishing a song?
-A: Thank everyone for listening to the song, and if anyone sent gifts while singing, thank them warmly right after.";
-
-fn default_welcome_phrases_zh() -> Vec<String> {
-    vec![
-        "欢迎大家来到小柔直播间".into(),
-        "欢迎大家进入直播间".into(),
-        "欢迎大家".into(),
-    ]
+    None
 }
 
-fn default_welcome_phrases_en() -> Vec<String> {
-    vec![
-        "Welcome everyone to the livestream!".into(),
-        "Welcome in everyone, so glad you're here!".into(),
-        "Welcome everyone!".into(),
-    ]
+fn strip_leading_track_number(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == 0 || i == bytes.len() {
+        return s;
+    }
+    let rest = &s[i..];
+    if let Some(after_delim) = rest.strip_prefix(['.', '、', '_', '-', '－', ' ', '\t']) {
+        let cleaned = after_delim.trim_start_matches(['.', '、', '_', '-', '－', ' ', '\t']);
+        if !cleaned.is_empty() {
+            return cleaned;
+        }
+    }
+    // Handle compact prefixes like "97云烟成雨" or "101红豆" while preserving titles like "2002年的第一场雪".
+    if let Some(first) = rest.chars().next()
+        && !first.is_ascii()
+        && !matches!(
+            first,
+            '年' | '月' | '日' | '度' | '分' | '秒' | '号' | '岁' | '夜' | '天'
+        )
+    {
+        return rest.trim();
+    }
+    s
+}
+
+fn strip_bracketed_notes(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut depth_paren = 0u32;
+    let mut depth_bracket = 0u32;
+    for ch in s.chars() {
+        match ch {
+            '(' | '（' => depth_paren += 1,
+            ')' | '）' if depth_paren > 0 => depth_paren -= 1,
+            '[' | '【' => depth_bracket += 1,
+            ']' | '】' if depth_bracket > 0 => depth_bracket -= 1,
+            _ if depth_paren == 0 && depth_bracket == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out.trim().to_owned()
+}
+
+pub fn clean_fallback_song_title(raw: &str) -> String {
+    let stem = strip_audio_ext(raw);
+    let base = strip_cover_suffix(stem);
+    let no_num = strip_leading_track_number(base);
+    let first_part = no_num
+        .split(['-', '－', '—', '–'])
+        .map(str::trim)
+        .find(|part| !part.is_empty())
+        .unwrap_or(no_num);
+    let cleaned = strip_bracketed_notes(first_part);
+    if cleaned.is_empty() {
+        stem.to_owned()
+    } else {
+        cleaned
+    }
+}
+
+pub fn resolve_song_title_from_text(raw: &str, mapping_text: Option<&str>) -> String {
+    let stem = strip_audio_ext(raw);
+    if stem.is_empty() {
+        return raw.trim().to_owned();
+    }
+    if let Some(text) = mapping_text {
+        let query_norm = normalize_song_key(stem);
+        let mut normalized_match: Option<&str> = None;
+        for line in text.lines() {
+            if let Some((k, v)) = split_song_mapping_line(line) {
+                if strip_audio_ext(k) == stem {
+                    return v.to_owned();
+                }
+                if normalized_match.is_none() && normalize_song_key(k) == query_norm {
+                    normalized_match = Some(v);
+                }
+            }
+        }
+        if let Some(v) = normalized_match {
+            return v.to_owned();
+        }
+    }
+    clean_fallback_song_title(stem)
+}
+
+pub fn resolve_song_title(cfg: &Settings, raw: &str) -> String {
+    let mapping = song_titles_file_path(cfg.is_english())
+        .and_then(|p| fs::read_to_string(p).ok())
+        .filter(|s| s.len() <= 256_000);
+    resolve_song_title_from_text(raw, mapping.as_deref())
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -93,9 +230,7 @@ pub struct Settings {
     pub reference_text: String,
     pub llm_endpoint: String,
     pub llm_model: String,
-    pub persona: String,
-    pub qa_reference: String,
-    pub qa_reference_en: String,
+    pub prompt_profile: String,
     pub youtube_video: String,
     pub audience_mode: String,
     pub subtitles: bool,
@@ -105,8 +240,6 @@ pub struct Settings {
     pub song_requests: bool,
     pub auto_welcome: bool,
     pub ambient_welcome_gap: u32,
-    pub welcome_phrases: Vec<String>,
-    pub welcome_phrases_en: Vec<String>,
     pub welcome_joins: bool,
     pub join_welcome_gap: u32,
     pub auto_thank_gifts: bool,
@@ -141,20 +274,16 @@ impl Default for Settings {
             reference_text: String::new(),
             llm_endpoint: "http://127.0.0.1:19847/v1/chat/completions".into(),
             llm_model: "mlx-community/Qwen2.5-1.5B-Instruct-4bit".into(),
-            persona: DEFAULT_PERSONA.into(),
-            qa_reference: default_qa_zh(),
-            qa_reference_en: DEFAULT_QA_EN.into(),
+            prompt_profile: "xiaorou".into(),
             youtube_video: String::new(),
             audience_mode: "review".into(),
-            subtitles: true,
+            subtitles: false,
             recording: false,
             actions: Vec::new(),
             action_gap: 12,
             song_requests: false,
             auto_welcome: true,
             ambient_welcome_gap: 45,
-            welcome_phrases: default_welcome_phrases_zh(),
-            welcome_phrases_en: default_welcome_phrases_en(),
             welcome_joins: true,
             join_welcome_gap: 20,
             auto_thank_gifts: true,
@@ -214,22 +343,6 @@ impl Settings {
         }
     }
 
-    pub fn active_qa_reference(&self) -> &str {
-        if self.is_english() {
-            &self.qa_reference_en
-        } else {
-            &self.qa_reference
-        }
-    }
-
-    pub fn active_welcome_phrases(&self) -> &[String] {
-        if self.is_english() {
-            &self.welcome_phrases_en
-        } else {
-            &self.welcome_phrases
-        }
-    }
-
     pub fn active_singing_action(&self) -> &str {
         if self.is_english() {
             &self.singing_action_en
@@ -258,9 +371,6 @@ impl Settings {
             self.voice_en = ZONOS_VOICE.into();
             self.reference_audio.clear();
             self.reference_text.clear();
-            if self.persona == PREVIOUS_PERSONA {
-                self.persona = DEFAULT_PERSONA.into();
-            }
         }
     }
 
@@ -276,6 +386,14 @@ impl Settings {
         ensure!(
             ["zh", "en"].contains(&self.live_language.as_str()),
             "直播语言仅支持中文（zh）或英文（en）"
+        );
+        ensure!(
+            (1..=64).contains(&self.prompt_profile.len())
+                && self
+                    .prompt_profile
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_".contains(&b)),
+            "话术档案名称仅支持 1 至 64 个英文字母、数字、连字符或下划线"
         );
         ensure!(
             ["mlx", "system"].contains(&self.tts_mode.as_str()),
@@ -322,15 +440,6 @@ impl Settings {
             self.song_volume <= 100 && self.bgm_volume <= 100 && self.bgm_duck_percent <= 100,
             "音量与闪避比例须在 0 至 100 之间"
         );
-        for phrases in [&self.welcome_phrases, &self.welcome_phrases_en] {
-            ensure!(
-                phrases.len() <= 50
-                    && phrases
-                        .iter()
-                        .all(|s| !s.trim().is_empty() && s.chars().count() <= 200),
-                "定时欢迎话术最多 50 条，每条 1 至 200 字"
-            );
-        }
         ensure!(
             self.singing_action.chars().count() <= 300
                 && self.singing_action_en.chars().count() <= 300
@@ -374,13 +483,7 @@ impl Settings {
                         .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')),
             "请填写 11 位 YouTube 直播视频 ID"
         );
-        ensure!(
-            self.persona.len() <= 16_000
-                && self.qa_reference.len() <= 32_000
-                && self.qa_reference_en.len() <= 32_000
-                && self.reference_text.len() <= 4000,
-            "文本过长"
-        );
+        ensure!(self.reference_text.len() <= 4000, "文本过长");
         ensure!(
             self.reference_audio.is_empty() == self.reference_text.trim().is_empty(),
             "参考录音和逐字稿须一同填写"
@@ -416,16 +519,21 @@ pub fn atomic(p: &Path, data: &[u8]) -> Result<()> {
 pub fn write_json<T: Serialize>(p: &Path, value: &T) -> Result<()> {
     atomic(p, &serde_json::to_vec_pretty(value)?)
 }
-pub fn load_settings(dir: &Path) -> Result<Settings> {
+pub fn load_settings(dir: &Path) -> Result<(Settings, crate::prompt_store::LegacyPrompts)> {
     let p = dir.join("settings.json");
-    let mut conf: Settings = if p.exists() {
-        read_json(&p)?
+    let (mut conf, legacy): (Settings, _) = if p.exists() {
+        let mut value = read_json(&p)?;
+        let legacy = crate::prompt_store::LegacyPrompts::take(&mut value)?;
+        (
+            serde_json::from_value(value).with_context(|| format!("无法读取 {}", p.display()))?,
+            legacy,
+        )
     } else {
-        Settings::default()
+        (Settings::default(), Default::default())
     };
     conf.upgrade_local_voice();
     conf.validate()?;
-    Ok(conf)
+    Ok((conf, legacy))
 }
 #[derive(Serialize, Deserialize)]
 pub struct Tokens {
@@ -495,7 +603,10 @@ fn parse_env_line(line: &str) -> Option<(String, String)> {
     if trimmed.is_empty() || trimmed.starts_with('#') {
         return None;
     }
-    let body = trimmed.strip_prefix("export ").map(str::trim_start).unwrap_or(trimmed);
+    let body = trimmed
+        .strip_prefix("export ")
+        .map(str::trim_start)
+        .unwrap_or(trimmed);
     let (raw_key, raw_val) = body.split_once('=')?;
     let key = raw_key.trim();
     if key.is_empty() {
@@ -651,12 +762,9 @@ mod tests {
             "action_gap",
             "song_requests",
             "live_language",
-            "qa_reference",
-            "qa_reference_en",
+            "prompt_profile",
             "auto_welcome",
             "ambient_welcome_gap",
-            "welcome_phrases",
-            "welcome_phrases_en",
             "welcome_joins",
             "join_welcome_gap",
             "auto_thank_gifts",
@@ -691,8 +799,7 @@ mod tests {
         assert_eq!(loaded.song_volume, 95);
         assert_eq!(loaded.bgm_volume, 25);
         assert_eq!(loaded.bgm_duck_percent, 30);
-        assert!(loaded.qa_reference.contains("欢迎某某"));
-        assert_eq!(loaded.welcome_phrases.len(), 3);
+        assert_eq!(loaded.prompt_profile, "xiaorou");
     }
 
     #[test]
@@ -702,14 +809,18 @@ mod tests {
         fs::write(&path, "# comment\nVIDU_API_KEY=\"vidu-secret\"\nOTHER=1\n").unwrap();
 
         assert_eq!(
-            read_env_value(&path, key_env_vars("vidu")).unwrap().as_deref(),
+            read_env_value(&path, key_env_vars("vidu"))
+                .unwrap()
+                .as_deref(),
             Some("vidu-secret")
         );
         assert_eq!(read_env_value(&path, key_env_vars("llm")).unwrap(), None);
 
         write_env_key(&path, "vidu", "vidu-next").unwrap();
         assert_eq!(
-            read_env_value(&path, key_env_vars("vidu")).unwrap().as_deref(),
+            read_env_value(&path, key_env_vars("vidu"))
+                .unwrap()
+                .as_deref(),
             Some("vidu-next")
         );
         let content = fs::read_to_string(&path).unwrap();
@@ -720,5 +831,52 @@ mod tests {
 
         write_env_key(&path, "vidu", "").unwrap();
         assert_eq!(read_env_value(&path, key_env_vars("vidu")).unwrap(), None);
+    }
+
+    #[test]
+    fn resolves_song_titles_from_mapping_and_fallback() {
+        let map = "\
+# comment
+223. 海伦-桥边姑娘－小柔演唱 = 桥边姑娘
+97云烟成雨-《我是江小白》动画片尾曲 - 房东的猫－小柔演唱 = 云烟成雨
+安和桥-宋冬野 = 安和桥
+";
+        assert_eq!(
+            resolve_song_title_from_text("223. 海伦-桥边姑娘－小柔演唱", Some(map)),
+            "桥边姑娘"
+        );
+        // Works with or without the "－小柔演唱" suffix and file extension
+        assert_eq!(
+            resolve_song_title_from_text("安和桥-宋冬野－小柔演唱.mp3", Some(map)),
+            "安和桥"
+        );
+        assert_eq!(
+            resolve_song_title_from_text("223. 海伦-桥边姑娘", Some(map)),
+            "桥边姑娘"
+        );
+        // Full-width equals sign from Chinese IME also works
+        assert_eq!(
+            resolve_song_title_from_text(
+                "陈奕迅-好久不见－小柔演唱",
+                Some("陈奕迅-好久不见 ＝ 好久不见")
+            ),
+            "好久不见"
+        );
+        // Fallback cleans up unmapped filenames cleanly while keeping numeric song titles
+        assert_eq!(
+            resolve_song_title_from_text(
+                "97云烟成雨-《我是江小白》动画片尾曲 - 房东的猫－小柔演唱",
+                None
+            ),
+            "云烟成雨"
+        );
+        assert_eq!(
+            resolve_song_title_from_text("090.旅行的意义(国) - 陈绮贞－小柔演唱", None),
+            "旅行的意义"
+        );
+        assert_eq!(
+            resolve_song_title_from_text("2002年的第一场雪 - 刀郎", None),
+            "2002年的第一场雪"
+        );
     }
 }

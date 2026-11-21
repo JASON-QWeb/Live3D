@@ -254,6 +254,20 @@ pub async fn bgm_audio(app: &App, id: Uuid) -> Result<(&'static str, Bytes)> {
         .context("背景音乐已移除或无法读取")?;
     Ok((audio::mime_for_ext(ext), raw.into()))
 }
+pub async fn bgm_wav(app: &App, id: Uuid) -> Result<Bytes> {
+    let (mime, raw) = bgm_audio(app, id).await?;
+    if mime == "audio/wav" {
+        return Ok(raw);
+    }
+    Ok(audio::decode_stereo_wav(&raw).await?.into())
+}
+pub async fn playback_wav(app: &App, id: Uuid) -> Result<Bytes> {
+    let (mime, raw) = playback_audio(app, id).await?;
+    if mime == "audio/wav" {
+        return Ok(raw);
+    }
+    Ok(audio::decode_stereo_wav(&raw).await?.into())
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,7 @@
 use crate::{
     audience, audio,
     config::{self, Settings},
-    output, services, session,
+    output, prompt_store, services, session,
     speech::{self, Job},
     state::{App, lock},
     vidu, wire,
@@ -63,13 +63,17 @@ pub fn routes() -> Router<App> {
         .route("/api/obs", post(obs_setup))
         .route("/api/tracks", get(tracks).delete(tracks_clear))
         .route("/api/tracks/{id}/audio", get(track_audio))
+        .route("/api/tracks/{id}/wav", get(track_wav))
         .route("/api/bgm", get(bgm_tracks).delete(bgm_clear))
         .route("/api/bgm/{id}/audio", get(bgm_audio))
+        .route("/api/bgm/{id}/wav", get(bgm_wav))
         .route("/api/bgm/control", post(bgm_control))
         .route("/api/audio-live", post(audio_live))
         .route("/api/stage/events", get(stage_events))
         .route("/api/stage/track/{id}", get(track_audio))
+        .route("/api/stage/track/{id}/wav", get(track_wav))
         .route("/api/stage/bgm/{id}", get(bgm_audio))
+        .route("/api/stage/bgm/{id}/wav", get(bgm_wav))
         .route("/api/stage/bgm/next", post(stage_bgm_next))
         .route("/api/choreo", post(choreo))
         .route("/api/soundcheck", post(soundcheck))
@@ -77,6 +81,10 @@ pub fn routes() -> Router<App> {
         .route("/api/test-audio/{id}/{client}", post(test_receipt))
         .route("/api/balance", get(balance))
         .route("/api/config", get(settings).put(update))
+        .route(
+            "/api/prompts/{id}/{language}",
+            get(prompt_document).put(save_prompt),
+        )
         .route("/api/key/{name}", put(secret))
         .route("/api/avatar", get(avatar).put(upload).delete(remove))
         .route("/api/start", post(start))
@@ -109,8 +117,9 @@ async fn settings(State(app): S) -> Api<Json<Value>> {
     for n in config::KEY_NAMES {
         keys.insert(n.into(), json!(config::key(n)?.is_some()));
     }
+    let cfg = app.config();
     Ok(Json(
-        json!({"settings":app.config(),"keys":keys,"avatar":app.dir.join("avatar.image").is_file(),
+        json!({"settings":cfg,"keys":keys,"avatar":app.dir.join("avatar.image").is_file(),
         "ffmpeg":audio::ffmpeg().is_some(),"unconfirmed":app.dir.join("open-session.json").is_file(),"data_dir":app.dir}),
     ))
 }
@@ -118,13 +127,47 @@ async fn update(State(app): S, Json(c): Json<Settings>) -> Api<Json<Value>> {
     let _g = app.gate.lock().await;
     busy(&app)?;
     c.validate()?;
-    let lang_changed = app.config().live_language != c.live_language;
+    let previous = app.config();
+    let lang_changed = previous.live_language != c.live_language;
+    if previous.prompt_profile != c.prompt_profile {
+        app.prompts.prepare(&c.prompt_profile, None)?;
+    }
     config::write_json(&app.dir.join("settings.json"), &c)?;
     *lock(&app.conf) = c;
     if lang_changed {
         services::ModelService::Voice.stop(&app).await;
     }
     Ok(ok())
+}
+
+fn profile_language(app: &App, id: &str, language: &str) -> Result<bool> {
+    ensure!(
+        lock(&app.conf).prompt_profile == id,
+        "当前话术档案已切换，请重新加载设置"
+    );
+    match language {
+        "zh" => Ok(false),
+        "en" => Ok(true),
+        _ => anyhow::bail!("话术档案语言无效"),
+    }
+}
+
+async fn prompt_document(
+    State(app): S,
+    Path((id, language)): Path<(String, String)>,
+) -> Api<Json<prompt_store::Document>> {
+    let english = profile_language(&app, &id, &language)?;
+    Ok(Json(app.prompts.document(&id, english)?))
+}
+
+async fn save_prompt(
+    State(app): S,
+    Path((id, language)): Path<(String, String)>,
+    Json(edit): Json<prompt_store::Edit>,
+) -> Api<Json<prompt_store::Document>> {
+    let _guard = app.gate.lock().await;
+    let english = profile_language(&app, &id, &language)?;
+    Ok(Json(app.prompts.save(&id, english, edit)?))
 }
 #[derive(Deserialize)]
 struct Secret {
@@ -205,7 +248,7 @@ fn text(s: &str, max: usize) -> Result<String> {
 async fn command(State(app): S, Json(c): Json<Act>) -> Api<Json<Value>> {
     match c.kind.as_str() {
         "say" => speech::enqueue(&app, Job::Speak(text(&c.text, 600)?))?,
-        "reply" => speech::enqueue(&app, Job::Reply(text(&c.text, 600)?))?,
+        "reply" => speech::enqueue(&app, Job::Reply(text(&c.text, 600)?.into()))?,
         "action" => {
             let s = text(&c.text, 500)?;
             let run = app.active()?;
@@ -294,6 +337,7 @@ async fn simulate(State(app): S, Json(q): Json<SimulatedEvent>) -> Api<Json<Valu
     let event = audience::Incoming {
         id: format!("sim-{}", uuid::Uuid::new_v4()),
         author: q.author,
+        viewer_id: None,
         text: q.text,
         gift,
         kind: Some(q.kind),
@@ -301,7 +345,9 @@ async fn simulate(State(app): S, Json(q): Json<SimulatedEvent>) -> Api<Json<Valu
         gift_name: q.gift_name,
         gift_count: q.gift_count,
     };
-    Ok(Json(json!({"accepted":audience::receive(&app,event,"simulate")?})))
+    Ok(Json(
+        json!({"accepted":audience::receive(&app,event,"simulate")?}),
+    ))
 }
 #[derive(Deserialize)]
 struct Recording {
@@ -363,26 +409,7 @@ async fn model_start(State(app): S) -> Api<Json<Value>> {
 }
 async fn reply_preview(State(app): S, Json(q): Json<Words>) -> Api<Response> {
     let line = text(&q.text, 500)?;
-    let cfg = app.config();
-    let (tx, mut rx) = tokio::sync::mpsc::channel(8);
-    let generate = crate::dialogue::sentences(
-        &app.http,
-        &cfg,
-        crate::dialogue::PromptKind::Chat,
-        &line,
-        &[],
-        tx,
-    );
-    let speak = async {
-        let mut pcm = Vec::new();
-        while let Some(line) = rx.recv().await {
-            let part = audio::synth(&app.http, &cfg, &line).await?;
-            ensure!(pcm.len() + part.len() < 32_000_000, "回复语音过长");
-            pcm.extend_from_slice(&part);
-        }
-        Ok::<_, anyhow::Error>(pcm)
-    };
-    let (_, pcm) = tokio::try_join!(generate, speak)?;
+    let pcm = speech::preview_reply(&app, line).await?;
     Ok(asset("audio/wav", audio::wav(&pcm)))
 }
 
@@ -462,6 +489,10 @@ async fn track_audio(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Response>
     let (mime, bytes) = crate::library::playback_audio(&app, id).await?;
     Ok(asset(mime, bytes))
 }
+async fn track_wav(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Response> {
+    let bytes = crate::library::playback_wav(&app, id).await?;
+    Ok(asset("audio/wav", bytes))
+}
 
 async fn bgm_tracks(State(app): S) -> Api<Json<Value>> {
     Ok(Json(json!(crate::library::bgm_list(&app)?)))
@@ -499,6 +530,10 @@ async fn bgm_clear(State(app): S) -> Api<Json<Value>> {
 async fn bgm_audio(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Response> {
     let (mime, bytes) = crate::library::bgm_audio(&app, id).await?;
     Ok(asset(mime, bytes))
+}
+async fn bgm_wav(State(app): S, Path(id): Path<uuid::Uuid>) -> Api<Response> {
+    let bytes = crate::library::bgm_wav(&app, id).await?;
+    Ok(asset("audio/wav", bytes))
 }
 
 #[derive(Deserialize)]
@@ -636,9 +671,8 @@ async fn audio_live(State(app): S, Json(q): Json<AudioLiveUpdate>) -> Api<Json<V
 async fn stage_events(State(app): S) -> Response {
     let rx = app.stage_tx.subscribe();
     let initial = json!({"event": "bgm_state", "bgm": output::bgm_snapshot(&app)});
-    let stream = futures_util::stream::unfold(
-        (Some(initial), rx),
-        |(mut first, mut rx)| async move {
+    let stream =
+        futures_util::stream::unfold((Some(initial), rx), |(mut first, mut rx)| async move {
             if let Some(init) = first.take() {
                 let chunk = Bytes::from(format!("data: {init}\n\n"));
                 return Some((Ok::<_, std::convert::Infallible>(chunk), (None, rx)));
@@ -656,8 +690,7 @@ async fn stage_events(State(app): S) -> Response {
                     }
                 }
             }
-        },
-    );
+        });
     let mut r = Response::new(axum::body::Body::from_stream(stream));
     r.headers_mut().insert(
         header::CONTENT_TYPE,

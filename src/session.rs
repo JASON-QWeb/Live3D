@@ -39,7 +39,8 @@ pub struct Run {
     pub gifts: mpsc::Sender<Offer>,
     pub choreo: watch::Sender<bool>,
     pub next_action: AtomicU64,
-    pub history: Mutex<std::collections::VecDeque<(String, String)>>,
+    pub history: Mutex<crate::replies::History>,
+    pub variants: Mutex<crate::replies::Variants>,
     pub singing: AtomicBool,
     pub busy: AtomicBool,
     pub last_activity_ms: AtomicU64,
@@ -48,7 +49,6 @@ pub struct Run {
     pub last_join_welcome_ms: AtomicU64,
     pub song_gifts: Mutex<Vec<PendingGift>>,
     pub next_track_index: AtomicUsize,
-    pub next_welcome_index: AtomicUsize,
 }
 pub fn signal(app: &App, t: u8, p: Value) -> Result<()> {
     let r = app.active()?;
@@ -87,6 +87,7 @@ pub async fn start(app: &App, keep_events: bool) -> Result<()> {
         choreo,
         next_action: 0.into(),
         history: Default::default(),
+        variants: Default::default(),
         singing: AtomicBool::new(false),
         busy: AtomicBool::new(false),
         last_activity_ms: AtomicU64::new(0),
@@ -95,7 +96,6 @@ pub async fn start(app: &App, keep_events: bool) -> Result<()> {
         last_join_welcome_ms: AtomicU64::new(0),
         song_gifts: Mutex::new(Vec::new()),
         next_track_index: AtomicUsize::new(0),
-        next_welcome_index: AtomicUsize::new(0),
     });
     *lock(&app.run) = Some(run.clone());
     lock(&app.seen).clear();

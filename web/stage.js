@@ -9,7 +9,11 @@ const client = crypto.randomUUID();
 const picture = document.getElementById("picture"),
   caption = document.getElementById("sub"),
   resume = document.getElementById("resume"),
-  stageNotice = document.getElementById("stageNotice");
+  stageNotice = document.getElementById("stageNotice"),
+  occupiedNotice = document.getElementById("occupiedNotice"),
+  takeoverBtn = document.getElementById("takeoverStage"),
+  songAudioEl = document.getElementById("songAudio"),
+  bgmAudioEl = document.getElementById("bgmAudio");
 let rtc = null,
   desired = "",
   joining = false,
@@ -254,6 +258,8 @@ async function probeReceiver() {
     // The stage will retry a failed download while it is idle.
   }
 }
+let bgmStatusText = "idle";
+let forceTakeover = false;
 const pack = () => ({
   client,
   status,
@@ -262,6 +268,8 @@ const pack = () => ({
   width,
   height,
   rtc_supported: rtcSupported,
+  force: forceTakeover,
+  bgm_status: bgmStatusText,
 });
 let trtcAudioMuted = false;
 function applyTrtcAudioMute(muted) {
@@ -280,20 +288,28 @@ function applyTrtcAudioMute(muted) {
 
 const clampVol = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 1));
 
+async function fetchAudioBlob(url) {
+  const r = await fetch(url, { headers: { Authorization: "Bearer " + token } });
+  if (!r.ok) throw Error("HTTP " + r.status);
+  return r.blob();
+}
+
 // =========================================================================
 // Hi-Fi Singing Audio Player (Vidu drives lips/actions; Stage outputs stereo)
 // =========================================================================
 let songPlaybackId = "";
-let songPlayer = null;
+let songTrackId = "";
 let songUrl = "";
 let songPlaying = false;
 let songPreparePromise = null;
+let songUsedWav = false;
 
 function disposeSongPlayer() {
-  if (songPlayer) {
-    songPlayer.pause();
-    songPlayer.onended = null;
-    songPlayer = null;
+  if (songAudioEl) {
+    songAudioEl.pause();
+    songAudioEl.onended = null;
+    songAudioEl.removeAttribute("src");
+    songAudioEl.load();
   }
   if (songUrl) {
     URL.revokeObjectURL(songUrl);
@@ -303,41 +319,41 @@ function disposeSongPlayer() {
 
 function stopSong() {
   songPlaybackId = "";
+  songTrackId = "";
   songPreparePromise = null;
   songPlaying = false;
+  songUsedWav = false;
   disposeSongPlayer();
   applyTrtcAudioMute(false);
   applyBgmState();
 }
 
-function prepareSong(msg) {
+function prepareSong(msg, useWav = false) {
   if (!stageOwner || !msg?.playback_id || !msg?.track_id) return Promise.resolve();
   pauseBgmNow();
-  if (songPlaybackId === msg.playback_id && songPreparePromise) {
-    if (songPlayer && msg.volume != null) songPlayer.volume = clampVol(msg.volume);
+  if (!useWav && songPlaybackId === msg.playback_id && songPreparePromise) {
+    if (songAudioEl && msg.volume != null) songAudioEl.volume = clampVol(msg.volume);
     return songPreparePromise;
   }
   disposeSongPlayer();
   songPlaying = false;
   const pid = msg.playback_id;
   songPlaybackId = pid;
+  songTrackId = msg.track_id;
+  songUsedWav = useWav;
   const task = (async () => {
     try {
-      const r = await fetch("/api/stage/track/" + encodeURIComponent(msg.track_id), {
-        headers: { Authorization: "Bearer " + token },
-      });
-      if (!r.ok) throw Error("song fetch failed");
-      const blob = await r.blob();
+      const path =
+        "/api/stage/track/" + encodeURIComponent(msg.track_id) + (useWav ? "/wav" : "");
+      const blob = await fetchAudioBlob(path);
       if (songPlaybackId !== pid) return;
       songUrl = URL.createObjectURL(blob);
-      const audio = new Audio(songUrl);
-      audio.preload = "auto";
-      audio.volume = clampVol(msg.volume ?? 0.95);
-      audio.onended = () => {
+      songAudioEl.src = songUrl;
+      songAudioEl.volume = clampVol(msg.volume ?? 0.95);
+      songAudioEl.onended = () => {
         if (songPlaybackId === pid) stopSong();
       };
-      audio.load();
-      songPlayer = audio;
+      songAudioEl.load();
     } catch {
       if (songPlaybackId === pid) stopSong();
     }
@@ -349,23 +365,37 @@ function prepareSong(msg) {
 async function playSong(msg) {
   if (!stageOwner || !msg?.playback_id || !msg?.track_id) return;
   const pid = msg.playback_id;
-  if (songPlaybackId !== pid || !songPlayer) {
-    await prepareSong(msg);
+  if (songPlaybackId !== pid || !songUrl) {
+    await prepareSong(msg, false);
   }
-  if (songPlaybackId !== pid || !songPlayer) return;
+  if (songPlaybackId !== pid || !songUrl) return;
   songPlaying = true;
   applyBgmState();
   applyTrtcAudioMute(true);
-  songPlayer.volume = clampVol(msg.volume ?? songPlayer.volume);
+  songAudioEl.volume = clampVol(msg.volume ?? songAudioEl.volume);
   if (msg.elapsed_ms > 150) {
     try {
-      songPlayer.currentTime = msg.elapsed_ms / 1000;
+      songAudioEl.currentTime = msg.elapsed_ms / 1000;
     } catch {}
   }
   try {
-    await songPlayer.play();
-  } catch {
-    resumes.push(() => (songPlayer ? songPlayer.play() : Promise.resolve()));
+    await songAudioEl.play();
+  } catch (err) {
+    if (err?.name !== "NotAllowedError" && !songUsedWav) {
+      await prepareSong(msg, true);
+      if (songPlaybackId === pid && songUrl) {
+        try {
+          await songAudioEl.play();
+          return;
+        } catch (err2) {
+          if (err2?.name !== "NotAllowedError") {
+            stopSong();
+            return;
+          }
+        }
+      }
+    }
+    resumes.push(() => (songUrl ? songAudioEl.play() : Promise.resolve()));
     resume.hidden = false;
     status = "audio_blocked";
   }
@@ -375,7 +405,6 @@ async function playSong(msg) {
 // Background Music (BGM) Player — Never drives Vidu; auto-ducks & auto-pauses
 // =========================================================================
 let bgmState = null;
-let bgmPlayer = null;
 let bgmUrl = "";
 let bgmLoadedTrackId = "";
 let bgmLoadingTrackId = "";
@@ -385,33 +414,34 @@ let bgmAutoplayBlocked = false;
 
 function pauseBgmNow() {
   clearInterval(bgmRampTimer);
-  if (bgmPlayer && !bgmPlayer.paused) {
-    bgmPlayer.pause();
+  if (bgmAudioEl && !bgmAudioEl.paused) {
+    bgmAudioEl.pause();
   }
+  if (bgmState?.enabled) bgmStatusText = "paused";
 }
 
 function rampBgmVolume(target, ms = 240) {
-  if (!bgmPlayer) return;
+  if (!bgmAudioEl) return;
   clearInterval(bgmRampTimer);
-  const start = bgmPlayer.volume;
+  const start = bgmAudioEl.volume;
   const dest = clampVol(target);
   if (Math.abs(dest - start) < 0.01) {
-    bgmPlayer.volume = dest;
+    bgmAudioEl.volume = dest;
     return;
   }
   const steps = Math.max(1, Math.round(ms / 25));
   let step = 0;
   bgmRampTimer = setInterval(() => {
-    if (!bgmPlayer) {
+    if (!bgmAudioEl) {
       clearInterval(bgmRampTimer);
       return;
     }
     step++;
     if (step >= steps) {
-      bgmPlayer.volume = dest;
+      bgmAudioEl.volume = dest;
       clearInterval(bgmRampTimer);
     } else {
-      bgmPlayer.volume = clampVol(start + ((dest - start) * step) / steps);
+      bgmAudioEl.volume = clampVol(start + ((dest - start) * step) / steps);
     }
   }, 25);
 }
@@ -420,11 +450,13 @@ function stopBgm() {
   bgmLoadSeq++;
   bgmLoadingTrackId = "";
   bgmAutoplayBlocked = false;
+  bgmStatusText = "idle";
   clearInterval(bgmRampTimer);
-  if (bgmPlayer) {
-    bgmPlayer.pause();
-    bgmPlayer.onended = null;
-    bgmPlayer = null;
+  if (bgmAudioEl) {
+    bgmAudioEl.pause();
+    bgmAudioEl.onended = null;
+    bgmAudioEl.removeAttribute("src");
+    bgmAudioEl.load();
   }
   if (bgmUrl) {
     URL.revokeObjectURL(bgmUrl);
@@ -434,17 +466,64 @@ function stopBgm() {
 }
 
 function queueBgmResume() {
+  bgmStatusText = "blocked";
   if (bgmAutoplayBlocked) return;
   bgmAutoplayBlocked = true;
-  resumes.push(() => {
+  resumes.push(async () => {
     bgmAutoplayBlocked = false;
-    if (!bgmPlayer || !bgmState?.enabled || bgmState?.paused_for_song || songPlaying || songPlaybackId) {
-      return Promise.resolve();
+    if (!bgmUrl || !bgmState?.enabled || bgmState?.paused_for_song || songPlaying || songPlaybackId) {
+      return;
     }
-    return bgmPlayer.play();
+    await bgmAudioEl.play();
+    bgmStatusText = "playing";
   });
   resume.hidden = false;
   status = "audio_blocked";
+}
+
+async function startBgmPlay(trackId, seq, targetVol, usedWav) {
+  if (seq !== bgmLoadSeq || !stageOwner) return;
+  if (bgmState?.paused_for_song || songPlaying || songPlaybackId || !bgmState?.enabled) {
+    bgmStatusText = "paused";
+    return;
+  }
+  try {
+    await bgmAudioEl.play();
+    if (seq === bgmLoadSeq) {
+      bgmStatusText = "playing";
+      bgmAutoplayBlocked = false;
+      if (status === "audio_blocked" && !resumes.length) {
+        status = rtc ? "waiting" : "standby";
+      }
+    }
+  } catch (err) {
+    if (seq !== bgmLoadSeq) return;
+    if (err?.name === "NotAllowedError") {
+      queueBgmResume();
+      return;
+    }
+    // Unsupported browser codec (e.g. FLAC/Ogg in Safari): auto-fallback to universal 48kHz stereo WAV!
+    if (!usedWav) {
+      bgmStatusText = "loading";
+      try {
+        const wavBlob = await fetchAudioBlob(
+          "/api/stage/bgm/" + encodeURIComponent(trackId) + "/wav",
+        );
+        if (seq !== bgmLoadSeq || !stageOwner) return;
+        if (bgmUrl) URL.revokeObjectURL(bgmUrl);
+        bgmUrl = URL.createObjectURL(wavBlob);
+        bgmAudioEl.src = bgmUrl;
+        bgmAudioEl.volume = targetVol;
+        bgmAudioEl.load();
+        await startBgmPlay(trackId, seq, targetVol, true);
+        return;
+      } catch (wavErr) {
+        bgmStatusText = "error:" + (wavErr?.message || "音频转码失败");
+        return;
+      }
+    }
+    bgmStatusText = "error:" + (err?.name || "无法播放");
+  }
 }
 
 async function applyBgmState(nextState) {
@@ -463,17 +542,13 @@ async function applyBgmState(nextState) {
   const duckRatio = clampVol(st.duck_percent ?? 0.3);
   const targetVol = st.ducked ? baseVol * duckRatio : baseVol;
 
-  if (bgmLoadedTrackId === st.track_id && bgmPlayer) {
-    if (bgmPlayer.paused && !bgmAutoplayBlocked) {
-      bgmPlayer.volume = Math.min(bgmPlayer.volume, targetVol);
-      try {
-        await bgmPlayer.play();
-      } catch {
-        queueBgmResume();
-        return;
-      }
+  if (bgmLoadedTrackId === st.track_id && bgmUrl) {
+    if (bgmAudioEl.paused && !bgmAutoplayBlocked) {
+      bgmAudioEl.volume = Math.min(bgmAudioEl.volume, targetVol);
+      await startBgmPlay(st.track_id, bgmLoadSeq, targetVol, false);
     }
-    if (!bgmPlayer.paused) {
+    if (!bgmAudioEl.paused) {
+      bgmStatusText = "playing";
       rampBgmVolume(targetVol, st.ducked ? 180 : 320);
     }
     return;
@@ -488,49 +563,38 @@ async function applyBgmState(nextState) {
   const trackId = st.track_id;
   bgmLoadingTrackId = trackId;
   bgmAutoplayBlocked = false;
+  bgmStatusText = "loading";
   clearInterval(bgmRampTimer);
-  if (bgmPlayer) {
-    bgmPlayer.pause();
-    bgmPlayer.onended = null;
-    bgmPlayer = null;
-  }
+  bgmAudioEl.pause();
+  bgmAudioEl.onended = null;
   if (bgmUrl) {
     URL.revokeObjectURL(bgmUrl);
     bgmUrl = "";
   }
   bgmLoadedTrackId = "";
   try {
-    const r = await fetch("/api/stage/bgm/" + encodeURIComponent(trackId), {
-      headers: { Authorization: "Bearer " + token },
-    });
-    if (!r.ok) return;
-    const blob = await r.blob();
+    const blob = await fetchAudioBlob("/api/stage/bgm/" + encodeURIComponent(trackId));
     if (seq !== bgmLoadSeq || !stageOwner) return;
     bgmUrl = URL.createObjectURL(blob);
-    const audio = new Audio(bgmUrl);
-    audio.preload = "auto";
-    audio.volume = targetVol;
-    audio.onended = () => {
+    bgmAudioEl.src = bgmUrl;
+    bgmAudioEl.volume = targetVol;
+    bgmAudioEl.onended = () => {
       if (seq !== bgmLoadSeq) return;
       bgmLoadedTrackId = "";
+      bgmStatusText = "loading";
       fetch("/api/stage/bgm/next", {
         method: "POST",
         headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify({ client }),
       }).catch(() => {});
     };
-    bgmPlayer = audio;
+    bgmAudioEl.load();
     bgmLoadedTrackId = trackId;
-    if (bgmState?.paused_for_song || songPlaying || songPlaybackId || !bgmState?.enabled) {
-      return;
+    await startBgmPlay(trackId, seq, targetVol, false);
+  } catch (err) {
+    if (seq === bgmLoadSeq) {
+      bgmStatusText = "error:" + (err?.message || "加载失败");
     }
-    try {
-      await audio.play();
-    } catch {
-      queueBgmResume();
-    }
-  } catch {
-    // Retry on next poll if transient fetch error occurred.
   } finally {
     if (bgmLoadingTrackId === trackId) bgmLoadingTrackId = "";
   }
@@ -553,7 +617,7 @@ function handleStageEvent(msg) {
       stopSong();
       break;
     case "song_volume":
-      if (songPlayer && msg.volume != null) songPlayer.volume = clampVol(msg.volume);
+      if (songAudioEl && msg.volume != null) songAudioEl.volume = clampVol(msg.volume);
       break;
     case "bgm_state":
       if (msg.bgm) applyBgmState(msg.bgm);
@@ -610,10 +674,12 @@ async function poll() {
   pollBusy = true;
   try {
     observe();
+    const reqBody = pack();
+    forceTakeover = false;
     const r = await fetch("/api/output", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify(pack()),
+      body: JSON.stringify(reqBody),
     });
     if (!r.ok) throw Error("output rejected");
     const v = await r.json();
@@ -630,9 +696,11 @@ async function poll() {
       stopSong();
       stopBgm();
       if (rtc || desired) await leave();
+      if (occupiedNotice) occupiedNotice.hidden = false;
       document.title = "Avatar3D · 舞台已被占用";
       return;
     }
+    if (occupiedNotice) occupiedNotice.hidden = true;
     document.title = "Avatar3D · 舞台输出";
     if (v.bgm) applyBgmState(v.bgm);
     if (!v.song && (songPlaying || songPlaybackId)) {
@@ -675,6 +743,19 @@ function startPolling() {
   poll();
   if (!pollTimer) pollTimer = setInterval(poll, 1000);
   connectEvents();
+}
+if (takeoverBtn) {
+  takeoverBtn.onclick = () => {
+    forceTakeover = true;
+    // Unlock audio elements in this tab inside the click gesture.
+    for (const el of [bgmAudioEl, songAudioEl]) {
+      try {
+        el.play().catch(() => {});
+        el.pause();
+      } catch {}
+    }
+    poll();
+  };
 }
 if (token) {
   startPolling();

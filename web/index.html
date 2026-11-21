@@ -485,10 +485,6 @@
 
               <div class="toggle-group">
                 <label class="check">
-                  <input name="subtitles" type="checkbox" />
-                  <span>舞台显示字幕</span>
-                </label>
-                <label class="check">
                   <input name="recording" type="checkbox" />
                   <span>请求云端录播</span>
                 </label>
@@ -521,7 +517,6 @@
               <button type="button" id="startModel" class="btn-chip">启动本机对话</button>
             </div>
             <h2 id="h-interact">互动、自动播报与弹幕</h2>
-            <p class="cell-desc">配置 AI 角色人设、QA 提示词参考、自动欢迎/定时唱歌调度与抖音 / TikTok / YouTube 互动策略。</p>
 
             <div class="fields">
               <div class="service-banner" id="modelState"></div>
@@ -536,9 +531,27 @@
                 </label>
               </div>
               <label>
-                <span>角色说话方式</span>
-                <textarea name="persona" rows="2"></textarea>
+                <span>话术档案</span>
+                <input name="prompt_profile" maxlength="64" pattern="[A-Za-z0-9_\-]+" required />
               </label>
+              <details class="sub-disclosure">
+                <summary>编辑话术</summary>
+                <div class="sub-fields">
+                  <div id="promptSource" class="prompt-source mono" role="status"></div>
+                  <label class="lang-zh">
+                    <span>中文话术 JSON</span>
+                    <textarea id="prompt-zh" class="mono" rows="12" spellcheck="false" disabled></textarea>
+                  </label>
+                  <label class="lang-en" hidden>
+                    <span>English speech profile JSON</span>
+                    <textarea id="prompt-en" class="mono" rows="12" spellcheck="false" disabled></textarea>
+                  </label>
+                  <div class="pair">
+                    <button type="button" id="reloadPrompt">重新读取</button>
+                    <button type="button" id="savePrompt" disabled>保存话术</button>
+                  </div>
+                </div>
+              </details>
               <div class="pair">
                 <label>
                   <span>YouTube 直播视频 ID</span>
@@ -622,24 +635,8 @@
               </div>
 
               <details class="sub-disclosure">
-                <summary>QA 提示词参考、欢迎词与唱歌神态</summary>
+                <summary>唱歌神态</summary>
                 <div class="sub-fields">
-                  <label class="lang-zh">
-                    <span>中文 QA 提示词参考（自动附带给 AI）</span>
-                    <textarea name="qa_reference" rows="5"></textarea>
-                  </label>
-                  <label class="lang-en" hidden>
-                    <span>English QA Reference (attached to AI prompts)</span>
-                    <textarea name="qa_reference_en" rows="5"></textarea>
-                  </label>
-                  <label class="lang-zh">
-                    <span>不唱歌时定时欢迎参考句（每行一句）</span>
-                    <textarea name="welcome_phrases" rows="3"></textarea>
-                  </label>
-                  <label class="lang-en" hidden>
-                    <span>Periodic welcome phrases between songs (one per line)</span>
-                    <textarea name="welcome_phrases_en" rows="3"></textarea>
-                  </label>
                   <label class="lang-zh">
                     <span>唱歌神态自然引导（留空则完全由 Vidu 自由发挥）</span>
                     <input name="singing_action" placeholder="例如：自然投入地唱歌，高潮处自然闭眼陶醉" />

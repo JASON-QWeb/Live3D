@@ -8,6 +8,9 @@ mod director;
 mod library;
 mod obs;
 mod output;
+mod prompt_store;
+mod prompts;
+mod replies;
 mod server;
 mod services;
 mod session;
@@ -22,8 +25,8 @@ use state::{App, Inner, lock};
 use std::{io::ErrorKind, time::Duration};
 use tokio::net::TcpListener;
 
-async fn open(app: &App, port: u16) -> Result<()> {
-    let url = format!("http://127.0.0.1:{port}/#{}", app.tokens.admin);
+async fn open(admin: &str, port: u16) -> Result<()> {
+    let url = format!("http://127.0.0.1:{port}/#{admin}");
     let status = tokio::process::Command::new("/usr/bin/open")
         .arg(url)
         .status()
@@ -71,7 +74,7 @@ async fn main() -> Result<()> {
                 .send()
                 .await?;
             if r.text().await? == "avatar3d-live" && dir.join("access.json").is_file() {
-                return open(&Inner::new(dir)?, port).await;
+                return open(&config::Tokens::load(&dir)?.admin, port).await;
             }
             bail!("端口 {port} 已被其他程序占用")
         }
@@ -88,8 +91,11 @@ async fn main() -> Result<()> {
         .context("同一数据目录已有 Avatar3D 在运行")?;
     let app = Inner::new(dir)?;
     if !headless {
-        open(&app, port).await.context("无法打开默认浏览器")?;
+        open(&app.tokens.admin, port)
+            .await
+            .context("无法打开默认浏览器")?;
     }
+    tokio::spawn(prompt_store::watch(app.clone()));
     println!("Avatar3D 正在 127.0.0.1:{port} 运行");
     axum::serve(listener, server::router(app.clone(), port))
         .with_graceful_shutdown(shutdown(app.clone()))

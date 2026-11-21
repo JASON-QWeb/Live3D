@@ -1,8 +1,8 @@
 use crate::{
     audio::{checked, limited},
     config::{key, now},
-    dialogue::PromptKind,
     director,
+    replies::{Chat, Event},
     speech::{self, Job},
     state::{App, lock},
 };
@@ -17,6 +17,8 @@ use tokio_util::sync::CancellationToken;
 pub struct Incoming {
     pub id: String,
     pub author: String,
+    #[serde(default)]
+    pub viewer_id: Option<String>,
     #[serde(default)]
     pub text: String,
     #[serde(default)]
@@ -68,7 +70,12 @@ fn platform_label(platform: Option<&str>, source: &str) -> Result<&'static str> 
 }
 
 fn resolve_kind(input: &Incoming) -> Result<EventKind> {
-    match input.kind.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    match input
+        .kind
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         Some("join") => Ok(EventKind::Join),
         Some("gift") => Ok(EventKind::Gift),
         Some("chat") => Ok(if input.gift {
@@ -91,6 +98,18 @@ fn format_gift_desc(gift_name: &str, count: u32, is_english: bool) -> String {
             format!("{gift_name} x{count}")
         } else {
             format!("{gift_name}×{count}")
+        }
+    } else {
+        gift_name.to_owned()
+    }
+}
+
+fn format_spoken_gift_desc(gift_name: &str, count: u32, is_english: bool) -> String {
+    if count > 1 {
+        if is_english {
+            format!("{count} {gift_name}")
+        } else {
+            format!("{count}个{gift_name}")
         }
     } else {
         gift_name.to_owned()
@@ -188,13 +207,11 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
                             )
                             .is_ok()
                     {
-                        let prompt = director::build_join_welcome_prompt(&cfg, author);
                         if let Err(e) = speech::enqueue_in(
                             app,
                             &run,
                             Job::AutoReply {
-                                kind: PromptKind::JoinWelcome,
-                                prompt,
+                                event: Event::Join(author.to_owned()),
                                 label: format!("进房欢迎 · {author}"),
                             },
                             false,
@@ -208,6 +225,7 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
         EventKind::Gift => {
             let gname = gift_name_clean.unwrap_or(text);
             let gift_desc = format_gift_desc(gname, gift_count, cfg.is_english());
+            let spoken_gift_desc = format_spoken_gift_desc(gname, gift_count, cfg.is_english());
             let detail = if !text.is_empty() && text != gname {
                 format!("{author} · {gift_desc} · {text}")
             } else {
@@ -231,15 +249,17 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
                     }
                     let job = if cfg.auto_thank_gifts {
                         if cfg.tts_mode != "system" {
-                            let prompt = director::build_gift_thanks_prompt(
-                                &cfg,
-                                safe_author.as_deref(),
-                                &gift_desc,
-                                text,
-                            );
                             Some(Job::AutoReply {
-                                kind: PromptKind::GiftThanks,
-                                prompt,
+                                event: Event::Gift {
+                                    viewer: safe_author,
+                                    name: gname.to_owned(),
+                                    description: spoken_gift_desc,
+                                    count: gift_count,
+                                    comment: (!text.is_empty()
+                                        && text != gname
+                                        && text != gift_desc)
+                                        .then(|| text.to_owned()),
+                                },
                                 label: format!("感谢礼物 · {gift_desc}"),
                             })
                         } else {
@@ -248,13 +268,13 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
                     } else if cfg.audience_mode == "read" {
                         let line = match safe_author {
                             Some(name) if cfg.is_english() => {
-                                format!("Thank you {name} for {gift_desc}!")
+                                format!("Thank you {name} for {spoken_gift_desc}!")
                             }
-                            Some(name) => format!("谢谢{name}送的{gift_desc}"),
+                            Some(name) => format!("谢谢{name}送的{spoken_gift_desc}"),
                             None if cfg.is_english() => {
-                                format!("Thank you for {gift_desc}!")
+                                format!("Thank you for {spoken_gift_desc}!")
                             }
-                            None => format!("谢谢老板送的{gift_desc}"),
+                            None => format!("谢谢老板送的{spoken_gift_desc}"),
                         };
                         Some(Job::Speak(line))
                     } else {
@@ -275,7 +295,12 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
                     text.strip_prefix("点歌")
                         .or_else(|| text.strip_prefix("!song "))
                         .or_else(|| text.strip_prefix("song "))
-                        .map(|s| s.trim().trim_start_matches('：').trim_start_matches(':').trim())
+                        .map(|s| {
+                            s.trim()
+                                .trim_start_matches('：')
+                                .trim_start_matches(':')
+                                .trim()
+                        })
                         .filter(|s| !s.is_empty())
                 } else {
                     None
@@ -283,20 +308,26 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
                 let job = if let Some(title) = requested {
                     crate::library::list(app)?
                         .into_iter()
-                        .find(|t| t.title == title)
+                        .find(|t| {
+                            t.title == title
+                                || crate::config::resolve_song_title(&cfg, &t.title)
+                                    .eq_ignore_ascii_case(title)
+                        })
                         .map(|t| Job::Track(t.id))
                 } else {
                     let safe_author = sanitize_author(author, cfg.is_english());
                     match cfg.audience_mode.as_str() {
                         "read" => Some(Job::Speak(text.into())),
-                        "reply" => {
-                            let chat_input = match safe_author {
-                                Some(name) if cfg.is_english() => format!("{name} says: {text}"),
-                                Some(name) => format!("观众「{name}」说：{text}"),
-                                None => text.to_owned(),
-                            };
-                            Some(Job::Reply(chat_input))
-                        }
+                        "reply" => Some(Job::Reply(Chat {
+                            text: text.into(),
+                            viewer: safe_author,
+                            viewer_id: input
+                                .viewer_id
+                                .as_deref()
+                                .map(str::trim)
+                                .filter(|id| !id.is_empty() && id.len() <= 250)
+                                .map(|id| format!("{source}/{plat}/{id}")),
+                        })),
                         _ => None,
                     }
                 };
@@ -354,6 +385,10 @@ fn youtube_message(item: &Value) -> Option<Incoming> {
         gift_count: gift.then_some(1),
         id: item["id"].as_str()?.into(),
         author: item.pointer("/authorDetails/displayName")?.as_str()?.into(),
+        viewer_id: item
+            .pointer("/authorDetails/channelId")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
         text: text.into(),
     })
 }
@@ -462,6 +497,7 @@ mod tests {
         let join_en = Incoming {
             id: "j1".into(),
             author: "Mike_99".into(),
+            viewer_id: None,
             text: String::new(),
             gift: false,
             kind: Some("join".into()),
@@ -476,6 +512,7 @@ mod tests {
         let gift_tt = Incoming {
             id: "g1".into(),
             author: "Alice".into(),
+            viewer_id: None,
             text: String::new(),
             gift: false,
             kind: Some("gift".into()),
@@ -489,16 +526,14 @@ mod tests {
         assert!(events.back().unwrap().text.contains("Rose×5"));
 
         // Legacy payload without kind/platform still works
-        let legacy: Incoming = serde_json::from_str(
-            r#"{"id":"l1","author":"小明","text":"晚上好","gift":false}"#,
-        )
-        .unwrap();
+        let legacy: Incoming =
+            serde_json::from_str(r#"{"id":"l1","author":"小明","text":"晚上好","gift":false}"#)
+                .unwrap();
         assert!(receive(&app, legacy, "local").unwrap());
         // Duplicate id is ignored
-        let dup: Incoming = serde_json::from_str(
-            r#"{"id":"l1","author":"小明","text":"晚上好","gift":false}"#,
-        )
-        .unwrap();
+        let dup: Incoming =
+            serde_json::from_str(r#"{"id":"l1","author":"小明","text":"晚上好","gift":false}"#)
+                .unwrap();
         assert!(!receive(&app, dup, "local").unwrap());
     }
 
@@ -527,6 +562,7 @@ mod tests {
             choreo,
             next_action: AtomicU64::new(0),
             history: Default::default(),
+            variants: Default::default(),
             singing: AtomicBool::new(true),
             busy: AtomicBool::new(true),
             last_activity_ms: AtomicU64::new(0),
@@ -535,7 +571,6 @@ mod tests {
             last_join_welcome_ms: AtomicU64::new(0),
             song_gifts: Mutex::new(Vec::new()),
             next_track_index: AtomicUsize::new(0),
-            next_welcome_index: AtomicUsize::new(0),
         });
         *lock(&app.run) = Some(run.clone());
         app.phase("live", "ready");
@@ -546,6 +581,7 @@ mod tests {
             Incoming {
                 id: "j-sing".into(),
                 author: "小美".into(),
+                viewer_id: None,
                 text: String::new(),
                 gift: false,
                 kind: Some("join".into()),
@@ -568,6 +604,7 @@ mod tests {
                 Incoming {
                     id: id.into(),
                     author: author.into(),
+                    viewer_id: None,
                     text: String::new(),
                     gift: true,
                     kind: Some("gift".into()),
@@ -596,6 +633,7 @@ mod tests {
             Incoming {
                 id: "j-en-idle".into(),
                 author: "Kevin".into(),
+                viewer_id: None,
                 text: String::new(),
                 gift: false,
                 kind: Some("join".into()),
@@ -613,6 +651,7 @@ mod tests {
             Incoming {
                 id: "j-zh-idle".into(),
                 author: "阿花".into(),
+                viewer_id: None,
                 text: String::new(),
                 gift: false,
                 kind: Some("join".into()),
@@ -631,6 +670,7 @@ mod tests {
             Incoming {
                 id: "j-zh-cd".into(),
                 author: "阿强".into(),
+                viewer_id: None,
                 text: String::new(),
                 gift: false,
                 kind: Some("join".into()),

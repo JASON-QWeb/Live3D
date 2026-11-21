@@ -14,6 +14,10 @@ pub struct Report {
     pub width: Option<u64>,
     pub height: Option<u64>,
     pub rtc_supported: Option<bool>,
+    #[serde(default)]
+    pub force: bool,
+    #[serde(default)]
+    pub bgm_status: Option<String>,
 }
 pub fn bgm_snapshot(app: &App) -> Value {
     let cfg = app.config();
@@ -80,7 +84,7 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
     let time = now();
     let (rtc, check, song) = {
         let mut s = lock(&app.screen);
-        if s.lease != q.client && time.saturating_sub(s.seen) < 10_000 {
+        if !q.force && s.lease != q.client && time.saturating_sub(s.seen) < 10_000 {
             return Ok(json!({"owner":false}));
         }
         if q.status == "released" {
@@ -100,11 +104,11 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
         )
     };
     let cfg = app.config();
-    let subtitles = cfg.subtitles;
-    let (live_id, phase, text) = {
+    let (live_id, phase) = {
         let mut v = lock(&app.view);
         let current = q.live_id.as_deref() == Some(v.live_id.as_str()) && !v.live_id.is_empty();
         v.output = status.into();
+        v.bgm_status = q.bgm_status.unwrap_or_default();
         if q.status == "playing" && current && q.width.unwrap_or(0) > 0 {
             if v.metrics.first_frame_ms.is_none() {
                 v.metrics.first_frame_ms = Some(time.saturating_sub(v.started));
@@ -113,12 +117,7 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
             v.metrics.output_height = q.height;
             v.metrics.output_fps = q.fps.filter(|n| n.is_finite() && (0.0..=240.0).contains(n));
         }
-        let text = if subtitles && time < v.subtitle_until {
-            v.subtitle.clone()
-        } else {
-            String::new()
-        };
-        (v.live_id.clone(), v.phase.clone(), text)
+        (v.live_id.clone(), v.phase.clone())
     };
     let song_json = song.map(|s| {
         let elapsed_ms = if s.state == "play" && s.started_at > 0 {
@@ -142,7 +141,7 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
         "live_id": live_id,
         "check": check,
         "rtc": rtc,
-        "subtitle": text,
+        "subtitle": "",
         "phase": phase,
         "song": song_json,
         "bgm": bgm,

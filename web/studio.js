@@ -154,11 +154,21 @@ function paint(v) {
   el("choreo").textContent = v.choreo ? "暂停动作编排" : "开始动作编排";
   el("playTrack").disabled = !live || !el("tracks").value;
   el("toggleBgm").textContent = v.bgm_playing || v.current_bgm ? "暂停 BGM" : "开启 BGM";
-  el("bgmNow").textContent = v.current_bgm
-    ? v.singing
-      ? "唱歌已自动暂停 · " + v.current_bgm
-      : "舞台播放中 · " + v.current_bgm
-    : "未播放";
+  el("bgmNow").textContent = !v.current_bgm
+    ? "未播放"
+    : !v.output
+      ? "舞台未打开（请点「打开舞台」）"
+      : v.singing
+        ? "唱歌已自动暂停 · " + v.current_bgm
+        : v.bgm_status === "blocked"
+          ? "请点舞台「允许播放声音」"
+          : v.bgm_status === "loading"
+            ? "舞台加载中… " + v.current_bgm
+            : v.bgm_status?.startsWith("error:")
+              ? "播放失败 · " + v.bgm_status.slice(6)
+              : v.bgm_status === "playing"
+                ? "舞台出声中 · " + v.current_bgm
+                : "等待舞台播放 · " + v.current_bgm;
   el("soundcheck").disabled = !!busy() || !v.output;
   el("message").textContent = v.message;
   el("outputState").textContent = v.output || "舞台未打开";
@@ -187,8 +197,18 @@ function paint(v) {
     }
   }
   const m = v.metrics;
-  el("latency").textContent =
+  const latency = el("latency");
+  latency.textContent =
     m.last_first_audio_ms === null ? "—" : (m.last_first_audio_ms / 1000).toFixed(2) + " 秒";
+  const reply = m.last_reply;
+  latency.title = reply ? [
+    reply.queue_ms != null && "排队 " + reply.queue_ms + " ms",
+    reply.first_token_ms != null && "模型首字 " + reply.first_token_ms + " ms",
+    reply.first_sentence_ms != null && "首句 " + reply.first_sentence_ms + " ms",
+    reply.tts_ms != null && "语音合成 " + reply.tts_ms + " ms",
+    reply.prompt_tokens != null && "输入 " + reply.prompt_tokens + " token",
+    reply.cached_tokens != null && "缓存命中 " + reply.cached_tokens + " token",
+  ].filter(Boolean).join(" · ") : "";
   el("dimensions").textContent = m.output_width
     ? m.output_width +
       " × " +
@@ -568,16 +588,34 @@ action("playTrack", async () => {
   notify("曲目已加入演唱队列");
 });
 
+async function previewAudioWithFallback(primaryUrl, wavUrl) {
+  const player = el("audio");
+  const playUrl = async (u) => {
+    const r = await request(u);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    audioUrl = URL.createObjectURL(await r.blob());
+    player.src = audioUrl;
+    player.hidden = false;
+    await player.play();
+  };
+  try {
+    await playUrl(primaryUrl);
+  } catch (err) {
+    if (err?.name !== "NotAllowedError" && wavUrl) {
+      await playUrl(wavUrl);
+    } else {
+      throw err;
+    }
+  }
+}
+
 action("previewTrack", async () => {
   const id = el("tracks").value;
   if (!id) return;
-  const r = await request("/api/tracks/" + encodeURIComponent(id) + "/audio");
-  if (audioUrl) URL.revokeObjectURL(audioUrl);
-  audioUrl = URL.createObjectURL(await r.blob());
-  const player = el("audio");
-  player.src = audioUrl;
-  player.hidden = false;
-  await player.play();
+  await previewAudioWithFallback(
+    "/api/tracks/" + encodeURIComponent(id) + "/audio",
+    "/api/tracks/" + encodeURIComponent(id) + "/wav",
+  );
 });
 
 action("removeTrack", async () => {
@@ -612,13 +650,10 @@ action("toggleBgm", async () => {
 action("previewBgm", async () => {
   const id = el("bgmTracks").value;
   if (!id) return;
-  const r = await request("/api/bgm/" + encodeURIComponent(id) + "/audio");
-  if (audioUrl) URL.revokeObjectURL(audioUrl);
-  audioUrl = URL.createObjectURL(await r.blob());
-  const player = el("audio");
-  player.src = audioUrl;
-  player.hidden = false;
-  await player.play();
+  await previewAudioWithFallback(
+    "/api/bgm/" + encodeURIComponent(id) + "/audio",
+    "/api/bgm/" + encodeURIComponent(id) + "/wav",
+  );
 });
 
 action("nextBgm", async () => {

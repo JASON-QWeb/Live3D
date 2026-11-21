@@ -69,6 +69,8 @@ export function confirmAction(title, desc, verb) {
 }
 export let configuration;
 let onUpdate = () => {};
+const promptDocs = new Map();
+const promptErrors = new Map();
 
 function syncKeys(keys) {
   el("keys").replaceChildren();
@@ -142,10 +144,44 @@ function syncLanguageUI(lang) {
   document.querySelectorAll(".lang-en").forEach((n) => (n.hidden = !isEn));
   const chip = el("langChip");
   if (chip) chip.textContent = isEn ? "英文直播 · EN" : "中文直播 · ZH";
+  showPrompt(lang);
+}
+
+function promptPath(id, lang) {
+  return "/api/prompts/" + encodeURIComponent(id) + "/" + lang;
+}
+
+function showPrompt(lang = el("liveLanguage").value) {
+  const doc = promptDocs.get(lang);
+  el("savePrompt").disabled = !doc;
+  el("promptSource").textContent = [
+    promptErrors.get(lang),
+    doc?.path,
+    doc?.knowledge_path,
+    doc?.active_version && "生效版本 " + doc.active_version,
+    doc?.error,
+  ].filter(Boolean).join("\n");
+}
+
+async function loadPrompt(lang, id = configuration.settings.prompt_profile) {
+  const field = el("prompt-" + lang);
+  try {
+    const doc = await api(promptPath(id, lang));
+    if (configuration.settings.prompt_profile !== id) return;
+    promptDocs.set(lang, doc);
+    promptErrors.delete(lang);
+    field.value = doc.text;
+    field.disabled = false;
+  } catch (e) {
+    if (configuration.settings.prompt_profile !== id) return;
+    promptErrors.set(lang, e.message);
+  }
+  showPrompt();
 }
 
 export async function loadConfig() {
   const d = await api("/api/config");
+  const profileChanged = d.settings.prompt_profile !== configuration?.settings.prompt_profile;
   configuration = d;
   const form = el("settings");
   for (const [k, v] of Object.entries(d.settings)) {
@@ -156,6 +192,17 @@ export async function loadConfig() {
     else input.value = v;
   }
   syncLanguageUI(d.settings.live_language || "zh");
+  if (profileChanged) {
+    promptDocs.clear();
+    promptErrors.clear();
+    for (const lang of ["zh", "en"]) {
+      const field = el("prompt-" + lang);
+      field.value = "";
+      field.disabled = true;
+      void loadPrompt(lang);
+    }
+    showPrompt();
+  }
   syncKeys(d.keys);
   el("dataPath").textContent = d.data_dir;
   const imgStatus = el("imageStatus");
@@ -186,6 +233,22 @@ export function setupConfig(updated) {
   onUpdate = updated;
   el("settings").addEventListener("submit", (e) => e.preventDefault());
   el("liveLanguage")?.addEventListener("change", (e) => syncLanguageUI(e.target.value));
+  action("reloadPrompt", () => loadPrompt(el("liveLanguage").value));
+  action("savePrompt", async () => {
+    const lang = el("liveLanguage").value;
+    const id = configuration.settings.prompt_profile;
+    const doc = promptDocs.get(lang);
+    if (!doc) return;
+    const field = el("prompt-" + lang);
+    const text = field.value;
+    const saved = await api(promptPath(id, lang), { revision: doc.revision, text }, "PUT");
+    if (configuration.settings.prompt_profile !== id) return;
+    promptDocs.set(lang, saved);
+    promptErrors.delete(lang);
+    if (field.value === text) field.value = saved.text;
+    showPrompt();
+    notify("话术已保存");
+  });
   action("save", async () => {
     const form = el("settings");
     if (!form.reportValidity()) return;

@@ -1610,6 +1610,13 @@ input[type="file"]::file-selector-button:hover {
   margin-top: 12px;
 }
 
+.prompt-source {
+  color: var(--body);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
 /* Service Status Banner (#voiceState, #modelState) */
 .service-banner {
   display: flex;

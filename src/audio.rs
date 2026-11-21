@@ -158,6 +158,72 @@ pub async fn decode(data: &[u8]) -> Result<Bytes> {
     ensure!(out.stdout.len() <= 600 * 48_000, "单条音频最长 10 分钟");
     Ok(out.stdout.into())
 }
+pub async fn decode_stereo_wav(data: &[u8]) -> Result<Vec<u8>> {
+    ensure!(
+        data.len() <= MAX_AUDIO && !data.is_empty(),
+        "音频为空或超过 128 MiB"
+    );
+    let exe = ffmpeg().context("请安装 ffmpeg（brew install ffmpeg）")?;
+    let mut c = Command::new(exe)
+        .kill_on_drop(true)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-protocol_whitelist",
+            "pipe",
+            "-i",
+            "pipe:0",
+            "-map",
+            "0:a:0",
+            "-vn",
+            "-t",
+            "601",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-f",
+            "s16le",
+            "pipe:1",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let mut input = c.stdin.take().context("无法打开音频管道")?;
+    let write = async {
+        let res = input.write_all(data).await;
+        drop(input);
+        res
+    };
+    let op = async {
+        let (_, out) = tokio::join!(write, c.wait_with_output());
+        out
+    };
+    let out = tokio::time::timeout(Duration::from_secs(45), op).await??;
+    ensure!(
+        out.status.success() && !out.stdout.is_empty(),
+        "无法转码音频"
+    );
+    Ok(wav_stereo_48k(&out.stdout))
+}
+pub fn wav_stereo_48k(pcm: &[u8]) -> Vec<u8> {
+    let len = pcm.len() as u32;
+    let mut out = Vec::with_capacity(44 + pcm.len());
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + len).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    // PCM=1, channels=2, sample_rate=48000, byte_rate=192000, block_align=4, bits=16
+    for v in [16u32, 0x00020001, 48000, 192000, 0x00100004] {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&len.to_le_bytes());
+    out.extend_from_slice(pcm);
+    out
+}
 async fn mac_voice(c: &Settings, text: &str) -> Result<Vec<u8>> {
     let tmp = tempfile::Builder::new().suffix(".aiff").tempfile()?;
     let voice = if c.is_english() {
