@@ -62,6 +62,8 @@ pub struct View {
     pub events: VecDeque<Event>,
     pub output: String,
     pub input: String,
+    /// Douyin comment collector state; empty when no room is set.
+    pub douyin: String,
     pub pending: u32,
     pub voice_busy: bool,
     pub singing: bool,

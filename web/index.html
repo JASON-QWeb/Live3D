@@ -23,10 +23,13 @@
           <button class="tab active" data-tab="desk" aria-current="page">直播台</button>
           <button class="tab" data-tab="config">设置</button>
         </nav>
-        <div class="top-state" role="status" aria-live="polite">
-          <span class="lang-chip" id="langChip">中文直播</span>
-          <i id="lamp" aria-hidden="true"></i>
-          <span id="phase">连接本机中</span>
+        <div class="top-end">
+          <button type="button" id="uiLang" class="ui-lang" aria-label="切换界面语言" title="切换界面语言">English</button>
+          <div class="top-state" role="status" aria-live="polite">
+            <span class="lang-chip" id="langChip">中文直播</span>
+            <i id="lamp" aria-hidden="true"></i>
+            <span id="phase">连接本机中</span>
+          </div>
         </div>
       </div>
     </header>
@@ -519,7 +522,59 @@
             <h2 id="h-interact">互动、自动播报与弹幕</h2>
 
             <div class="fields">
+              <div class="pair">
+                <label>
+                  <span>直播平台（先选这一项）</span>
+                  <select name="live_platform" id="livePlatform" required>
+                    <option value="" disabled>请选择直播平台</option>
+                    <option value="douyin">抖音</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="other">TikTok / 其他平台（外部工具接入）</option>
+                  </select>
+                </label>
+                <label>
+                  <span>收到普通弹幕后</span>
+                  <select name="audience_mode">
+                    <option value="review">仅显示，由主播处理</option>
+                    <option value="read">自动朗读</option>
+                    <option value="reply">自动生成回复</option>
+                  </select>
+                </label>
+              </div>
+              <label data-platform="douyin" hidden>
+                <span>抖音直播间号</span>
+                <input name="douyin_room" maxlength="200" spellcheck="false" placeholder="直播间号或 live.douyin.com 链接" />
+              </label>
+              <div class="service-banner" id="douyinState" data-platform="douyin" hidden></div>
+              <details class="sub-disclosure" data-platform="douyin" hidden>
+                <summary>高级：改用外部 douyinLive</summary>
+                <div class="sub-fields">
+                  <p class="meta">默认由 Avatar3D 直接连接直播间。只有内置连接失效、要临时换回外部 douyinLive 时才填程序路径，清空即恢复内置连接。</p>
+                  <label>
+                    <span>douyinLive 程序路径</span>
+                    <input name="douyin_program" spellcheck="false" autocomplete="off" placeholder="例如 /Users/你的用户名/douyinLive/douyinLive" />
+                  </label>
+                  <label>
+                    <span>douyinLive 端口</span>
+                    <input name="douyin_port" type="number" min="1" max="65535" required />
+                  </label>
+                </div>
+              </details>
+              <label data-platform="youtube" hidden>
+                <span>YouTube 直播视频 ID（API Key 在「连接凭据」里保存）</span>
+                <input name="youtube_video" maxlength="11" placeholder="11 位视频 ID" />
+              </label>
+              <p class="meta" data-platform="other" hidden>
+                由有授权的本机采集工具把弹幕推送进来。在「连接凭据」点「复制本机弹幕接入信息」，把地址和令牌填进采集工具。
+              </p>
               <div class="service-banner" id="modelState"></div>
+              <div class="service-progress" id="modelProgress" hidden>
+                <div class="service-progress-row">
+                  <span id="modelProgressStep"></span>
+                  <span class="mono" id="modelProgressValue"></span>
+                </div>
+                <div class="meter" role="progressbar" aria-labelledby="modelProgressStep"><span></span></div>
+              </div>
               <div class="pair">
                 <label>
                   <span>语言模型接口</span>
@@ -552,21 +607,6 @@
                   </div>
                 </div>
               </details>
-              <div class="pair">
-                <label>
-                  <span>YouTube 直播视频 ID</span>
-                  <input name="youtube_video" maxlength="11" placeholder="11 位视频 ID" />
-                </label>
-                <label>
-                  <span>收到普通弹幕后</span>
-                  <select name="audience_mode">
-                    <option value="review">仅显示，由主播处理</option>
-                    <option value="read">自动朗读</option>
-                    <option value="reply">自动生成回复</option>
-                  </select>
-                </label>
-              </div>
-
               <div class="toggle-group">
                 <label class="check">
                   <input type="checkbox" name="auto_welcome" />
@@ -673,6 +713,13 @@
 
             <div class="fields">
               <div class="service-banner" id="voiceState"></div>
+              <div class="service-progress" id="voiceProgress" hidden>
+                <div class="service-progress-row">
+                  <span id="voiceProgressStep"></span>
+                  <span class="mono" id="voiceProgressValue"></span>
+                </div>
+                <div class="meter" role="progressbar" aria-labelledby="voiceProgressStep"><span></span></div>
+              </div>
               <label>
                 <span>直播语言环境（单选）</span>
                 <select name="live_language" id="liveLanguage">
@@ -759,14 +806,14 @@
               </span>
               <span class="meta-badge mono">WS v5</span>
             </div>
-            <h2 id="h-obs">OBS 场景</h2>
-            <p class="cell-desc">连接本机 OBS WebSocket，一键建立「Avatar3D · 数字人」浏览器源。</p>
+            <h2 id="h-obs">OBS 场景与开播</h2>
+            <p class="cell-desc">连接本机 OBS WebSocket，建立「Avatar3D · 数字人」浏览器源，填好推流码后直接在这里开播。</p>
 
             <div class="fields">
               <div class="pair">
                 <label>
                   <span>本机 WebSocket 端口</span>
-                  <input id="obsPort" type="number" min="1" max="65535" value="4455" />
+                  <input id="obsPort" name="obs_port" type="number" min="1" max="65535" value="4455" required />
                 </label>
                 <label>
                   <span>OBS WebSocket 密码</span>
@@ -774,9 +821,26 @@
                 </label>
               </div>
               <div class="row wrap-row">
+                <button id="openObs" type="button">打开 OBS</button>
                 <button id="setupObs" type="button">建立 Avatar3D 场景</button>
                 <span class="meta" id="obsStatus"></span>
               </div>
+              <p class="meta obs-missing" id="obsMissing" hidden>
+                这台 Mac 上没有找到 OBS Studio。<a href="https://obsproject.com/download" target="_blank" rel="noopener noreferrer">下载 OBS</a>，装好后再点「打开 OBS」。
+              </p>
+              <label>
+                <span>推流地址（服务器）</span>
+                <input id="streamServer" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="rtmp://… 直播平台给的服务器地址" />
+              </label>
+              <label>
+                <span>推流码（串流密钥）</span>
+                <input id="streamKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="直播平台给的推流码" />
+              </label>
+              <div class="row wrap-row">
+                <button id="saveStream" type="button">保存到 OBS</button>
+                <button id="obsLive" type="button" class="primary" disabled>开始直播</button>
+              </div>
+              <div class="service-banner" id="streamState"></div>
             </div>
 
             <div class="obs-flow" aria-hidden="true">

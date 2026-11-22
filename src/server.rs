@@ -84,6 +84,10 @@ pub fn router(app: App, port: u16) -> Router {
             get(|| async { js(include_str!("../web/settings.js")) }),
         )
         .route(
+            "/i18n.js",
+            get(|| async { js(include_str!("../web/i18n.js")) }),
+        )
+        .route(
             "/stage.js",
             get(|| async { js(include_str!("../web/stage.js")) }),
         )

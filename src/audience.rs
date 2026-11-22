@@ -454,7 +454,7 @@ async fn listen(app: &App, video: &str, credential: &str) -> Result<()> {
 }
 pub async fn youtube(app: App, stop: CancellationToken) {
     let c = app.config();
-    if c.youtube_video.is_empty() {
+    if c.live_platform != "youtube" || c.youtube_video.is_empty() {
         return;
     }
     let work = async {

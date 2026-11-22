@@ -1,0 +1,44 @@
+diff --git a/sign/ab_sign.go b/sign/ab_sign.go
+index 0fa9b8a..e63da58 100644
+--- a/sign/ab_sign.go
++++ b/sign/ab_sign.go
+@@ -4,6 +4,7 @@ import (
+ 	"crypto/rc4"
+ 	"encoding/base64"
+ 	"encoding/binary"
++	"fmt"
+ 	"math/bits"
+ 	"time"
+ )
+@@ -298,8 +299,11 @@ func splitToBytes(num uint32) []byte {
+ //   - suffix: a_bogus 后缀随机片段。 Random suffix fragment for a_bogus.
+ //   - arguments: 算法固定参数表。 Fixed algorithm argument table.
+ func generateRc4BbStr(urlSearchParams, userAgent, windowEnvStr string, suffix string, arguments []int) string {
++	return generateRc4BbStrAt(urlSearchParams, userAgent, windowEnvStr, suffix, arguments, uint32(time.Now().UnixMilli()))
++}
++
++func generateRc4BbStrAt(urlSearchParams, userAgent, windowEnvStr string, suffix string, arguments []int, startTime uint32) string {
+ 	sm3 := NewSM3()
+-	startTime := uint32(time.Now().UnixMilli())
+ 
+ 	// 计算三次哈希。
+ 	// Compute the three hash rounds.
+@@ -433,3 +437,18 @@ func AbSign(urlSearchParams, userAgent string) string {
+ 		"s4",
+ 	) + "="
+ }
++
++// AbSignAt is AbSign with a fixed start time (milliseconds, truncated to 32 bits), for recording.
++func AbSignAt(urlSearchParams, userAgent string, startTime int64) string {
++	windowEnvStr := "1920|1080|1920|1040|0|30|0|0|1872|92|1920|1040|1857|92|1|24|Win32"
++	return resultEncrypt(
++		generateRandomStr()+
++			generateRc4BbStrAt(urlSearchParams, userAgent, windowEnvStr, "cus", []int{0, 1, 14}, uint32(startTime)),
++		"s4",
++	) + "="
++}
++
++// SM3Hex exposes the package's SM3 for recording.
++func SM3Hex(data string) string {
++	return fmt.Sprintf("%x", NewSM3().Sum([]byte(data)))
++}

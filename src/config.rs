@@ -10,7 +10,7 @@ use std::{
 use uuid::Uuid;
 
 pub const PORT: u16 = 19848;
-pub const KEY_NAMES: [&str; 3] = ["vidu", "llm", "youtube"];
+pub const KEY_NAMES: [&str; 5] = ["vidu", "llm", "youtube", "obs", "douyin"];
 const LOCAL_TTS: &str = "http://127.0.0.1:19849/v1/audio/speech";
 pub const MING: &str = "jorgepb96/Ming-3.0-tts-0.5B-4bit";
 pub const ZONOS: &str = "mlx-community/ZONOS3-Mini";
@@ -255,6 +255,13 @@ pub struct Settings {
     pub song_volume: u32,
     pub bgm_volume: u32,
     pub bgm_duck_percent: u32,
+    pub obs_port: u16,
+    /// Where comments come from: "douyin", "youtube" or "other" (external tools
+    /// posting to /api/ingest). Empty until the operator picks one.
+    pub live_platform: String,
+    pub douyin_room: String,
+    pub douyin_port: u16,
+    pub douyin_program: String,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -302,6 +309,11 @@ impl Default for Settings {
             song_volume: 95,
             bgm_volume: 25,
             bgm_duck_percent: 30,
+            obs_port: 4455,
+            live_platform: String::new(),
+            douyin_room: String::new(),
+            douyin_port: 1089,
+            douyin_program: String::new(),
         }
     }
 }
@@ -362,6 +374,18 @@ impl Settings {
         self.tts_mode == "mlx" && self.tts_endpoint == LOCAL_TTS
     }
 
+    /// Settings saved before the platform choice existed keep the source they had set up.
+    fn upgrade_platform(&mut self) {
+        if !self.live_platform.is_empty() {
+            return;
+        }
+        if !self.douyin_room.trim().is_empty() {
+            self.live_platform = "douyin".into();
+        } else if !self.youtube_video.is_empty() {
+            self.live_platform = "youtube".into();
+        }
+    }
+
     fn upgrade_local_voice(&mut self) {
         if self.uses_local_voice() {
             self.tts_model = MING.into();
@@ -382,6 +406,7 @@ impl Settings {
             ["720p", "1080p", "2k"].contains(&self.resolution.as_str()),
             "分辨率无效"
         );
+        ensure!(self.obs_port > 0, "OBS WebSocket 端口无效");
         ensure!(
             ["zh", "en"].contains(&self.live_language.as_str()),
             "直播语言仅支持中文（zh）或英文（en）"
@@ -482,6 +507,24 @@ impl Settings {
                         .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')),
             "请填写 11 位 YouTube 直播视频 ID"
         );
+        ensure!(
+            ["", "douyin", "youtube", "other"].contains(&self.live_platform.as_str()),
+            "直播平台无效"
+        );
+        ensure!(
+            self.douyin_room.trim().is_empty()
+                || crate::douyin::room_id(&self.douyin_room).is_some(),
+            "抖音直播间号无效，请填直播间号或 live.douyin.com 链接"
+        );
+        ensure!(self.douyin_port > 0, "douyinLive 端口无效");
+        let program = self.douyin_program.trim();
+        ensure!(
+            program.is_empty()
+                || (program.starts_with('/')
+                    && program.len() <= 1024
+                    && !program.chars().any(char::is_control)),
+            "douyinLive 程序路径须为完整路径，以 / 开头"
+        );
         ensure!(self.reference_text.len() <= 4000, "文本过长");
         ensure!(
             self.reference_audio.is_empty() == self.reference_text.trim().is_empty(),
@@ -531,6 +574,7 @@ pub fn load_settings(dir: &Path) -> Result<(Settings, crate::prompt_store::Legac
         (Settings::default(), Default::default())
     };
     conf.upgrade_local_voice();
+    conf.upgrade_platform();
     conf.validate()?;
     Ok((conf, legacy))
 }
@@ -561,6 +605,8 @@ fn key_env_vars(name: &str) -> &'static [&'static str] {
         "vidu" => &["AVATAR3D_VIDU_KEY", "VIDU_API_KEY", "VIDU_KEY"],
         "llm" => &["AVATAR3D_LLM_KEY", "LLM_API_KEY", "OPENAI_API_KEY"],
         "youtube" => &["AVATAR3D_YOUTUBE_KEY", "YOUTUBE_API_KEY"],
+        "obs" => &["AVATAR3D_OBS_PASSWORD"],
+        "douyin" => &["AVATAR3D_DOUYIN_COOKIE"],
         _ => &[],
     }
 }
@@ -801,6 +847,37 @@ mod tests {
         assert_eq!(loaded.prompt_profile, "xiaorou");
         assert!(!loaded.singing_action.contains("闭眼"));
         assert!(!loaded.singing_action.contains("陶醉"));
+    }
+
+    #[test]
+    fn platform_choice_carries_over_from_older_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let save = |patch: serde_json::Value| {
+            let mut v = serde_json::to_value(Settings::default()).unwrap();
+            let fields = v.as_object_mut().unwrap();
+            fields.remove("live_platform");
+            fields.extend(patch.as_object().unwrap().clone());
+            write_json(&dir.path().join("settings.json"), &v).unwrap();
+            load_settings(dir.path()).unwrap().0.live_platform
+        };
+        assert_eq!(save(serde_json::json!({})), "");
+        assert_eq!(
+            save(serde_json::json!({"youtube_video":"dQw4w9WgXcQ"})),
+            "youtube"
+        );
+        assert_eq!(
+            save(serde_json::json!({"douyin_room":"516466932480"})),
+            "douyin"
+        );
+        assert_eq!(
+            save(serde_json::json!({"live_platform":"other","youtube_video":"dQw4w9WgXcQ"})),
+            "other"
+        );
+        let unknown = Settings {
+            live_platform: "bilibili".into(),
+            ..Settings::default()
+        };
+        assert!(unknown.validate().is_err());
     }
 
     #[test]
