@@ -8,10 +8,10 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
-from huggingface_hub import snapshot_download
 import mlx.core as mx
 from mlx_audio.audio_io import write
 from mlx_audio.tts import load
+from model_fetch import fetch, report
 import numpy as np
 from pydantic import BaseModel, Field
 import uvicorn
@@ -44,9 +44,8 @@ class SpeechRequest(BaseModel):
 def checkpoint(repo, revision, files, model_type):
     path = Path(os.environ["HF_HOME"]) / "tts" / repo.split("/")[-1]
     if not all((path / name).is_file() for name in files):
-        snapshot_download(
-            repo_id=repo, revision=revision, allow_patterns=list(files), local_dir=path
-        )
+        fetch(repo, revision=revision, allow_patterns=list(files), local_dir=path)
+        report("load")
     return load(str(path), model_type=model_type)
 
 
