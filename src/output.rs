@@ -22,22 +22,23 @@ pub struct Report {
 pub fn bgm_snapshot(app: &App) -> Value {
     let cfg = app.config();
     let items = crate::library::bgm_list(app).unwrap_or_default();
-    let (enabled, index, revision, singing, voice_busy) = {
+    let (enabled, index, requested, revision, singing, voice_busy) = {
         let s = lock(&app.screen);
         let v = lock(&app.view);
         (
-            s.bgm_enabled && !items.is_empty(),
+            s.bgm_enabled && (!items.is_empty() || s.requested_bgm.is_some()),
             if items.is_empty() {
                 0
             } else {
                 s.bgm_index % items.len()
             },
+            s.requested_bgm.clone(),
             s.bgm_revision,
             v.singing,
             v.voice_busy,
         )
     };
-    let current = items.get(index);
+    let current = requested.as_ref().or(items.get(index));
     {
         let mut v = lock(&app.view);
         v.bgm_playing = enabled && !singing;
@@ -55,6 +56,7 @@ pub fn bgm_snapshot(app: &App) -> Value {
         "duck_percent": cfg.bgm_duck_percent as f32 / 100.0,
         "revision": revision,
         "index": index,
+        "online": current.is_some_and(|t| t.online.is_some()),
         "track_id": current.map(|t| t.id.to_string()),
         "title": current.map(|t| t.title.as_str()).unwrap_or(""),
         "queue": items.iter().map(|t| json!({"id": t.id.to_string(), "title": t.title})).collect::<Vec<_>>(),
@@ -144,6 +146,7 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
         "subtitle": "",
         "phase": phase,
         "song": song_json,
+        "dance": lock(&app.screen).dance.clone(),
         "bgm": bgm,
     }))
 }

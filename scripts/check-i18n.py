@@ -93,7 +93,7 @@ def page():
 
 def scripts():
     found = {}
-    for path in ("web/settings.js", "web/studio.js"):
+    for path in ("web/settings.js", "web/studio.js", "web/online-bgm.js", "web/studio-dance.js"):
         for n, line in enumerate(io.open(path, encoding="utf-8").read().splitlines(), 1):
             if line.strip().startswith("//"):
                 continue

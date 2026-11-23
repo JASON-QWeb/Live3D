@@ -97,8 +97,12 @@ pub struct Screen {
     pub tone: Option<crate::soundcheck::Tone>,
     pub poster: Option<(u64, bytes::Bytes)>,
     pub song: Option<StageSong>,
+    pub dance: Option<crate::dance::Playback>,
     pub bgm_enabled: bool,
     pub bgm_index: usize,
+    pub requested_bgm: Option<crate::library::BgmTrack>,
+    pub bgm_requests: VecDeque<crate::library::BgmTrack>,
+    pub failed_bgm: std::collections::HashSet<uuid::Uuid>,
     pub bgm_revision: u64,
 }
 pub struct Inner {
@@ -115,6 +119,7 @@ pub struct Inner {
     pub voice_process: tokio::sync::Mutex<Option<tokio::process::Child>>,
     pub chat_process: tokio::sync::Mutex<Option<tokio::process::Child>>,
     pub obs_gate: tokio::sync::Mutex<()>,
+    pub music_lookups: Arc<tokio::sync::Semaphore>,
     pub library_gate: tokio::sync::Mutex<()>,
     pub sdk_gate: tokio::sync::Mutex<()>,
     pub seen: Mutex<VecDeque<String>>,
@@ -156,6 +161,7 @@ impl Inner {
             voice_process: tokio::sync::Mutex::new(None),
             chat_process: tokio::sync::Mutex::new(None),
             obs_gate: tokio::sync::Mutex::new(()),
+            music_lookups: Arc::new(tokio::sync::Semaphore::new(4)),
             library_gate: tokio::sync::Mutex::new(()),
             sdk_gate: tokio::sync::Mutex::new(()),
             seen: Mutex::new(VecDeque::new()),

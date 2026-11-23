@@ -68,7 +68,7 @@ static void installMenus(AvatarDesktop *desktop) {
     config.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
     AvatarConfigureFilePicker(config);
     WKWebView *view = [[WKWebView alloc] initWithFrame:NSZeroRect configuration:config];
-    self.controlWindow = [self windowForView:view title:@"Vorela" size:NSMakeSize(1280, 840)];
+    self.controlWindow = [self windowForView:view title:@"Vorela" size:NSMakeSize(1560, 840)];
     [view loadRequest:[NSURLRequest requestWithURL:self.controlURL]];
     [self showControl:nil];
 }

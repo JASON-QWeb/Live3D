@@ -306,14 +306,20 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
                     None
                 };
                 let job = if let Some(title) = requested {
-                    crate::library::list(app)?
+                    let local = crate::library::list(app)?
                         .into_iter()
                         .find(|t| {
                             t.title == title
                                 || crate::config::resolve_song_title(&cfg, &t.title)
                                     .eq_ignore_ascii_case(title)
                         })
-                        .map(|t| Job::Track(t.id))
+                        .map(|t| Job::Track(t.id));
+                    if local.is_none()
+                        && let Err(e) = crate::bgm::audience_request(app, title)
+                    {
+                        app.event("背景音乐点歌", e.to_string());
+                    }
+                    local
                 } else {
                     let safe_author = sanitize_author(author, cfg.is_english());
                     match cfg.audience_mode.as_str() {

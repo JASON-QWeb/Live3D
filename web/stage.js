@@ -1,3 +1,4 @@
+import { dancePlayer } from "./stage-dance.js";
 sessionStorage.removeItem("vorela.admin");
 const supplied = location.hash.slice(1);
 if (supplied) {
@@ -115,8 +116,8 @@ async function join(id, cred) {
       }
     });
     instance.on(T.EVENT.REMOTE_AUDIO_AVAILABLE, () => {
-      if (version === generation && trtcAudioMuted) {
-        applyTrtcAudioMute(true);
+      if (version === generation && (trtcAudioMuted || danceAudio)) {
+        applyTrtcAudioMute(trtcAudioMuted);
       }
     });
     instance.on(T.EVENT.ERROR, () => {
@@ -139,8 +140,8 @@ async function join(id, cred) {
       autoReceiveVideo: true,
       enableAutoPlayDialog: false,
     });
-    if (version === generation && trtcAudioMuted) {
-      applyTrtcAudioMute(true);
+    if (version === generation && (trtcAudioMuted || danceAudio)) {
+      applyTrtcAudioMute(trtcAudioMuted);
     }
     if (version === generation && status === "joining") status = "waiting";
   } catch {
@@ -164,14 +165,14 @@ resume.onclick = async () => {
     status = "audio_blocked";
   }
 };
-async function frame(video) {
+async function frame(video, id = desired) {
   const c = document.createElement("canvas");
   c.width = Math.min(480, video.videoWidth);
   c.height = Math.max(1, Math.round((video.videoHeight * c.width) / video.videoWidth));
   c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
   const blob = await new Promise((resolve) => c.toBlob(resolve, "image/jpeg", 0.65));
-  if (blob && desired && stageOwner) {
-    await fetch("/api/frame/" + client + "/" + encodeURIComponent(desired), {
+  if (blob && id && stageOwner) {
+    await fetch("/api/frame/" + client + "/" + encodeURIComponent(id), {
       method: "PUT",
       headers: { Authorization: "Bearer " + token },
       body: blob,
@@ -179,6 +180,8 @@ async function frame(video) {
   }
 }
 function observe() {
+  const overlay = dance.visible();
+  if (overlay) frame(overlay.video, overlay.id).catch(() => {});
   const video = picture.querySelector("video");
   if (!video || video.readyState < 2 || !video.videoWidth || video.paused || !rtc) return;
   const t = performance.now(),
@@ -271,9 +274,15 @@ const pack = () => ({
   force: forceTakeover,
   bgm_status: bgmStatusText,
 });
-let trtcAudioMuted = false;
+let trtcAudioMuted = false, danceAudio = false;
+const dance = dancePlayer(client, () => token, active => {
+  danceAudio = active;
+  bgmAudioEl.muted = songAudioEl.muted = active;
+  applyTrtcAudioMute(trtcAudioMuted);
+});
 function applyTrtcAudioMute(muted) {
   trtcAudioMuted = muted;
+  muted ||= danceAudio;
   if (rtc) {
     try {
       rtc.muteRemoteAudio("*", muted);
@@ -294,9 +303,7 @@ async function fetchAudioBlob(url) {
   return r.blob();
 }
 
-// =========================================================================
-// Hi-Fi Singing Audio Player (Vidu drives lips/actions; Stage outputs stereo)
-// =========================================================================
+// Singing audio
 let songPlaybackId = "";
 let songTrackId = "";
 let songUrl = "";
@@ -518,11 +525,32 @@ async function startBgmPlay(trackId, seq, targetVol, usedWav) {
         await startBgmPlay(trackId, seq, targetVol, true);
         return;
       } catch (wavErr) {
+        if (seq !== bgmLoadSeq) return;
+        if (bgmState?.online) await advanceStageBgm(bgmState, true).catch(() => {});
         bgmStatusText = "error:" + (wavErr?.message || "音频转码失败");
         return;
       }
     }
     bgmStatusText = "error:" + (err?.name || "无法播放");
+    if (bgmState?.online) await advanceStageBgm(bgmState, true).catch(() => {});
+  }
+}
+
+let advancingRevision = null;
+async function advanceStageBgm(st, failed = false) {
+  if (advancingRevision === st.revision || !stageOwner) return;
+  advancingRevision = st.revision;
+  try {
+    const response = await fetch("/api/stage/bgm/next", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ client, revision: st.revision, failed: failed ? st.track_id : null }),
+    });
+    if (!response.ok) throw new Error(response.statusText);
+    const result = await response.json();
+    if (result.bgm && bgmState?.revision === st.revision) applyBgmState(result.bgm);
+  } finally {
+    if (advancingRevision === st.revision) advancingRevision = null;
   }
 }
 
@@ -533,6 +561,7 @@ async function applyBgmState(nextState) {
     stopBgm();
     return;
   }
+  if (advancingRevision === st.revision) return;
   const pausedForSong = !!st.paused_for_song || songPlaying || !!songPlaybackId;
   if (pausedForSong) {
     pauseBgmNow();
@@ -582,11 +611,7 @@ async function applyBgmState(nextState) {
       if (seq !== bgmLoadSeq) return;
       bgmLoadedTrackId = "";
       bgmStatusText = "loading";
-      fetch("/api/stage/bgm/next", {
-        method: "POST",
-        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({ client }),
-      }).catch(() => {});
+      advanceStageBgm(bgmState).catch(() => {});
     };
     bgmAudioEl.load();
     bgmLoadedTrackId = trackId;
@@ -594,15 +619,14 @@ async function applyBgmState(nextState) {
   } catch (err) {
     if (seq === bgmLoadSeq) {
       bgmStatusText = "error:" + (err?.message || "加载失败");
+      if (st.online) await advanceStageBgm(st, true).catch(() => {});
     }
   } finally {
     if (bgmLoadingTrackId === trackId) bgmLoadingTrackId = "";
   }
 }
 
-// =========================================================================
-// Low-Latency SSE Event Stream for Sub-5ms Song & Ducking Triggers
-// =========================================================================
+// Stage events
 let sseAbort = null;
 function handleStageEvent(msg) {
   if (!stageOwner || !msg?.event) return;
@@ -691,6 +715,7 @@ async function poll() {
       serverBootId = v.boot_id;
     }
     stageOwner = v.owner;
+    dance.sync(stageOwner ? v.dance : null);
     if (!v.owner) {
       stopCheck();
       stopSong();
@@ -714,7 +739,7 @@ async function poll() {
       if (rtc || desired) await leave();
       probeReceiver();
       caption.textContent = "";
-      audition(v.check || "");
+      audition(danceAudio ? "" : (v.check || ""));
       return;
     }
     if (checkId) stopCheck();
@@ -728,6 +753,7 @@ async function poll() {
   }
 }
 window.addEventListener("pagehide", () => {
+  dance.sync(null);
   if (!stageOwner) return;
   fetch("/api/output", {
     method: "POST",

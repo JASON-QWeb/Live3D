@@ -3,8 +3,8 @@ import { t, tr } from "./i18n.js";
 export const el = (id) => document.getElementById(id);
 const keyNames = {
   vidu: "Vidu API Key",
-  llm: "语言模型密钥",
-  youtube: "YouTube Data API Key",
+  llm: "语言模型密钥（本机模型可留空）",
+  youtube: "YouTube Data API Key（仅内置弹幕接入需要）",
   douyin: "抖音 Cookie（选填，匿名连接受限时用）",
 };
 const incoming = location.hash.slice(1);
@@ -97,6 +97,7 @@ const promptErrors = new Map();
 
 function syncKeys(keys) {
   el("keys").replaceChildren();
+  el("viduKey").replaceChildren();
   for (const [name, title] of Object.entries(keyNames)) {
     const wrap = document.createElement("div"),
       head = document.createElement("div"),
@@ -150,7 +151,7 @@ function syncKeys(keys) {
       row.append(clear);
     }
     wrap.append(head, row);
-    el("keys").append(wrap);
+    el(name === "vidu" ? "viduKey" : "keys").append(wrap);
   }
 }
 

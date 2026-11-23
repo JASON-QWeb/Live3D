@@ -16,6 +16,8 @@ pub struct Track {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct BgmTrack {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub online: Option<crate::music::Source>,
     pub id: Uuid,
     pub title: String,
     pub duration_ms: usize,
@@ -186,6 +188,7 @@ pub async fn bgm_add(
     ensure!(!items.iter().any(|t| t.title == title), "曲目已存在");
     ensure!(items.len() < 500, "背景音乐已达 500 首上限");
     let t = BgmTrack {
+        online: None,
         id: Uuid::new_v4(),
         title: title.into(),
         duration_ms: pcm.len() / 48,
@@ -210,6 +213,21 @@ pub async fn bgm_remove(app: &App, id: Uuid) -> Result<()> {
         .context("找不到背景音乐")?;
     let removed = items.remove(index);
     config::write_json(&app.dir.join("bgm.json"), &items)?;
+    {
+        let mut s = crate::state::lock(&app.screen);
+        s.failed_bgm.remove(&id);
+        if index < s.bgm_index {
+            s.bgm_index -= 1;
+        }
+        if items.is_empty() && s.requested_bgm.is_none() {
+            s.requested_bgm = s.bgm_requests.pop_front();
+            s.bgm_enabled &= s.requested_bgm.is_some();
+        }
+        s.bgm_revision = s.bgm_revision.wrapping_add(1);
+    }
+    if removed.online.is_some() {
+        return Ok(());
+    }
     let ext = if removed.source_ext.is_empty() {
         "wav"
     } else {
@@ -226,7 +244,16 @@ pub async fn bgm_clear(app: &App) -> Result<usize> {
     let items = bgm_list(app)?;
     let count = items.len();
     config::write_json(&app.dir.join("bgm.json"), &Vec::<BgmTrack>::new())?;
-    for t in items {
+    {
+        let mut s = crate::state::lock(&app.screen);
+        s.bgm_enabled = false;
+        s.bgm_index = 0;
+        s.requested_bgm = None;
+        s.bgm_requests.clear();
+        s.failed_bgm.clear();
+        s.bgm_revision = s.bgm_revision.wrapping_add(1);
+    }
+    for t in items.into_iter().filter(|t| t.online.is_none()) {
         let ext = if t.source_ext.is_empty() {
             "wav"
         } else {
@@ -240,10 +267,16 @@ pub async fn bgm_clear(app: &App) -> Result<usize> {
     Ok(count)
 }
 pub async fn bgm_audio(app: &App, id: Uuid) -> Result<(&'static str, Bytes)> {
-    let item = bgm_list(app)?
-        .into_iter()
-        .find(|t| t.id == id)
+    let requested = crate::state::lock(&app.screen)
+        .requested_bgm
+        .clone()
+        .filter(|t| t.id == id);
+    let item = requested
+        .or(bgm_list(app)?.into_iter().find(|t| t.id == id))
         .context("找不到背景音乐")?;
+    if let Some(source) = item.online {
+        return crate::music::audio_bytes(app, &source).await;
+    }
     let ext = if item.source_ext.is_empty() {
         "wav"
     } else {

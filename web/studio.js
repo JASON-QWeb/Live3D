@@ -1,3 +1,5 @@
+import { loadDances, paintDance } from "./studio-dance.js";
+import { setupOnlineBgm, paintOnlineBgm, loadBgm as loadBgmList } from "./online-bgm.js";
 import { t, tr, lang, setLang } from "./i18n.js";
 import {
   el,
@@ -113,44 +115,38 @@ async function refreshAvatar() {
     }
     if (avatarUrl) URL.revokeObjectURL(avatarUrl);
     avatarUrl = u;
+    const preview = el("avatarPreview");
+    if (u) preview.src = u;
+    else preview.removeAttribute("src");
+    preview.hidden = !u;
     showPoster();
   } catch (e) {
     notify(e.message);
   }
 }
 
-function makeEmptyEvents() {
-  const box = document.createElement("div");
-  box.className = "empty-events";
-  const pill = document.createElement("span");
-  pill.className = "audit-pill";
-  pill.innerHTML = '<i aria-hidden="true"></i>';
-  pill.append(t("监听就绪"));
-  const well = document.createElement("span");
-  well.className = "empty-well";
-  well.setAttribute("aria-hidden", "true");
-  well.innerHTML =
-    '<svg viewBox="0 0 20 20"><path d="M10 3.2l5.6 2.2v4.2c0 3.5-2.3 6.1-5.6 7-3.3-.9-5.6-3.5-5.6-7V5.4L10 3.2Z" /><path d="M7.8 10.1l1.5 1.5 3-3.1" /></svg>';
-  const text = document.createElement("span");
-  text.className = "empty-events-text";
-  text.textContent = t("暂无直播事件");
-  box.append(pill, well, text);
-  return box;
+function paintEvents(v) {
+  const events = v.events;
+  el("eventCount").textContent = events.length ? t("{0} 条", events.length) : "";
+  el("clearEvents").hidden = !events.length;
+  paintFeed(el("events"), events, t("暂无直播事件"));
+  const audience = events.filter((event) => /·(?:弹幕|礼物)$/.test(event.kind));
+  paintFeed(el("audienceFeed"), audience, t("等待弹幕或礼物"));
 }
 
-function paintEvents(v) {
-  const list = el("events");
-  const stamp = JSON.stringify(v.events);
+function paintFeed(list, events, emptyLabel) {
+  const stamp = JSON.stringify(events);
   if (list.dataset.stamp === stamp) return;
   list.dataset.stamp = stamp;
   list.replaceChildren();
-  el("eventCount").textContent = v.events.length ? t("{0} 条", v.events.length) : "";
-  if (el("clearEvents")) el("clearEvents").hidden = !v.events.length;
-  if (!v.events.length) {
-    list.append(makeEmptyEvents());
+  if (!events.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-events";
+    empty.textContent = emptyLabel;
+    list.append(empty);
     return;
   }
-  for (const e of [...v.events].reverse()) {
+  for (const e of [...events].reverse()) {
     const item = document.createElement("div"),
       time = document.createElement("time"),
       type = document.createElement("small"),
@@ -166,6 +162,7 @@ function paintEvents(v) {
 
 function paint(v) {
   state = v;
+  paintOnlineBgm(v);
   const live = v.phase === "live";
   const douyin = el("douyinState");
   douyin.textContent = v.douyin ? t("抖音弹幕 · {0}", tr(v.douyin)) : "";
@@ -179,9 +176,8 @@ function paint(v) {
   el("send").disabled = !live;
   for (const button of quickActions) button.disabled = !live;
   el("interrupt").disabled = !live;
-  for (const id of ["media", "reference", "reset", "removeRef"]) el(id).disabled = !live;
-  el("choreo").disabled = !live || !configuration?.settings.actions.length;
-  el("choreo").textContent = t(v.choreo ? "暂停动作编排" : "开始动作编排");
+  for (const id of ["reference", "removeRef"]) el(id).disabled = !live;
+  paintDance(v);
   el("playTrack").disabled = !live || !el("tracks").value;
   el("toggleBgm").textContent = t(v.bgm_playing || v.current_bgm ? "暂停 BGM" : "开启 BGM");
   el("bgmNow").textContent = !v.current_bgm
@@ -252,7 +248,7 @@ function paint(v) {
           : "—";
   el("recovery").hidden = v.phase !== "unconfirmed";
   el("recordRow").hidden = !(v.phase === "ended" && configuration?.settings.recording);
-  if (!live && frameUrl) {
+  if (!live && !v.dance?.started && frameUrl) {
     URL.revokeObjectURL(frameUrl);
     frameUrl = "";
     showPoster();
@@ -267,7 +263,7 @@ async function tick() {
     const v = await api("/api/status");
     paint(v);
     timer++;
-    if (v.phase === "live" && !visibleConfig && timer % 2 === 0) {
+    if ((v.phase === "live" || v.dance?.started) && !visibleConfig && timer % 2 === 0) {
       const r = await request("/api/monitor");
       if (frameUrl) URL.revokeObjectURL(frameUrl);
       frameUrl = r.status === 204 ? "" : URL.createObjectURL(await r.blob());
@@ -467,13 +463,7 @@ async function fileEvent(input, path) {
     input.value = "";
   }
 }
-el("media").onchange = (e) => fileEvent(e.target, "/api/media");
 el("reference").onchange = (e) => fileEvent(e.target, "/api/reference/" + el("refKind").value);
-
-action("choreo", async () => {
-  await api("/api/choreo", { on: !state.choreo });
-  await tick();
-});
 
 const AUDIO_EXT_RE = /\.(mp3|wav|flac|m4a|aac|ogg|opus|aiff|aif|wma|webm|mp4)$/i;
 function isImportableAudio(file, allowMp4) {
@@ -565,24 +555,6 @@ async function loadTracks() {
   el("playTrack").disabled = !items.length || state?.phase !== "live";
 }
 
-async function loadBgm() {
-  const items = await api("/api/bgm"),
-    select = el("bgmTracks"),
-    old = select.value;
-  select.replaceChildren();
-  if (!items.length) select.add(new Option(t("暂无背景音乐"), ""));
-  for (const t of items) {
-    select.add(new Option(t.title + " · " + timespan(t.duration_ms), t.id));
-  }
-  if (items.some((t) => t.id === old)) select.value = old;
-  el("bgmCount").textContent = items.length ? t("共 {0} 首", items.length) : "";
-  el("toggleBgm").disabled = !items.length;
-  el("nextBgm").disabled = items.length < 2;
-  el("previewBgm").disabled = !items.length;
-  el("removeBgm").disabled = !items.length;
-  el("clearBgm").disabled = !items.length;
-}
-
 el("addTrack").onchange = (e) =>
   importAudioBatch(e.currentTarget.files, e.currentTarget, {
     endpoint: "/api/tracks/",
@@ -669,6 +641,9 @@ action("clearTracks", async () => {
   }
 });
 
+function loadBgm() { return loadBgmList(timespan); }
+setupOnlineBgm(loadBgm, tick);
+
 action("toggleBgm", async () => {
   const res = await api("/api/bgm/control", { action: "toggle" });
   await tick();
@@ -692,11 +667,6 @@ action("previewBgm", async () => {
   );
 });
 
-action("nextBgm", async () => {
-  await api("/api/bgm/control", { action: "next" });
-  await tick();
-});
-
 el("bgmTracks").onchange = async () => {
   const id = el("bgmTracks").value;
   if (id && (state?.bgm_playing || state?.current_bgm)) {
@@ -708,23 +678,6 @@ el("bgmTracks").onchange = async () => {
     }
   }
 };
-
-action("removeBgm", async () => {
-  if (await confirmAction(t("移除背景音乐"), t("移除所选背景音乐在 Vorela 中的副本。"), t("移除"))) {
-    await request("/api/bgm/" + el("bgmTracks").value, { method: "DELETE" });
-    await loadBgm();
-    await tick();
-  }
-});
-
-action("clearBgm", async () => {
-  if (await confirmAction(t("清空背景音乐"), t("移除全部背景音乐副本（不影响原始文件）。"), t("清空全部"))) {
-    await request("/api/bgm", { method: "DELETE" });
-    await loadBgm();
-    await tick();
-    notify(t("已清空背景音乐"));
-  }
-});
 
 let liveAudioTimer = 0;
 function pushLiveAudio(patch) {
@@ -757,7 +710,6 @@ el("liveBgmVol").oninput = (e) => {
   pushLiveAudio({ bgm_volume: v });
 };
 
-action("reset", () => api("/api/command", { kind: "reset" }));
 action("removeRef", () => api("/api/command", { kind: "remove_reference" }));
 
 async function sendSimulated(kind) {
@@ -828,6 +780,7 @@ if (!token) {
 } else {
   try {
     await loadConfig();
+    await loadDances();
     await loadTracks();
     await loadBgm();
     await tick();

@@ -1,13 +1,16 @@
 mod api;
 mod audience;
 mod audio;
+mod bgm;
 mod choreo;
 mod config;
+mod dance;
 mod desktop;
 mod dialogue;
 mod director;
 mod douyin;
 mod library;
+mod music;
 mod obs;
 mod output;
 mod paths;

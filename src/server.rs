@@ -76,6 +76,10 @@ pub fn router(app: App, port: u16) -> Router {
             get(|| async { Html(include_str!("../web/stage.html")) }),
         )
         .route(
+            "/online-bgm.js",
+            get(|| async { js(include_str!("../web/online-bgm.js")) }),
+        )
+        .route(
             "/studio.js",
             get(|| async { js(include_str!("../web/studio.js")) }),
         )
@@ -97,6 +101,14 @@ pub fn router(app: App, port: u16) -> Router {
             }),
         )
         .route(
+            "/stage-dance.js",
+            get(|| async { js(include_str!("../web/stage-dance.js")) }),
+        )
+        .route(
+            "/studio-dance.js",
+            get(|| async { js(include_str!("../web/studio-dance.js")) }),
+        )
+        .route(
             "/stage.js",
             get(|| async { js(include_str!("../web/stage.js")) }),
         )
@@ -111,10 +123,14 @@ pub fn router(app: App, port: u16) -> Router {
         )
         .route(
             "/mark.svg",
+            get(|| async { axum::response::Redirect::temporary("/mark.png") }),
+        )
+        .route(
+            "/mark.png",
             get(|| async {
                 (
-                    [(header::CONTENT_TYPE, "image/svg+xml")],
-                    include_str!("../web/mark.svg"),
+                    [(header::CONTENT_TYPE, "image/png")],
+                    include_bytes!("../web/mark.png").as_slice(),
                 )
             }),
         )

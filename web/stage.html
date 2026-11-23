@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <title>Vorela · 舞台输出</title>
-    <link rel="icon" type="image/svg+xml" href="/mark.svg?v=2" />
+    <link rel="icon" type="image/png" href="/mark.png" />
     <style>
       :root {
         --sans: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue",
@@ -32,6 +32,19 @@
       }
       #picture video {
         object-fit: contain !important;
+      }
+      #danceLayer video {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: black;
+      }
+      #danceUnlock {
+        position: fixed; z-index: 21; left: 50%; top: 50%;
+        transform: translate(-50%, -50%); padding: 12px 20px; border-radius: 20px;
       }
       #sub {
         position: absolute;
@@ -193,6 +206,8 @@
   <body>
     <div id="picture"></div>
     <div id="sub"></div>
+    <div id="danceLayer"></div>
+    <button id="danceUnlock" hidden>播放舞蹈视频</button>
     <audio id="songAudio" preload="auto" playsinline></audio>
     <audio id="bgmAudio" preload="auto" playsinline></audio>
     <button id="resume" hidden>
@@ -205,7 +220,7 @@
     <div id="occupiedNotice" hidden>
       <div class="stage-card">
         <div class="stage-card-head">
-          <img src="/mark.svg" alt="Vorela" />
+          <img src="/mark.png" alt="Vorela" />
           <span class="stage-pill"><i aria-hidden="true"></i>舞台已被占用</span>
         </div>
         <h1>另一窗口或 OBS 正在输出舞台</h1>
@@ -216,7 +231,7 @@
     <div id="stageNotice" hidden>
       <div class="stage-card">
         <div class="stage-card-head">
-          <img src="/mark.svg" alt="Vorela" />
+          <img src="/mark.png" alt="Vorela" />
           <span class="stage-pill"><i aria-hidden="true"></i>等待授权</span>
         </div>
         <h1>需要舞台访问令牌</h1>

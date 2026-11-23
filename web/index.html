@@ -6,14 +6,14 @@
     <meta name="theme-color" content="#f5f5f7" />
     <meta name="description" content="Vorela 本机角色互动直播控制台：实时监看画面、播音调度、弹幕互动与 OBS 场景集成。" />
     <title>Vorela · 直播控制台</title>
-    <link rel="icon" type="image/svg+xml" href="/mark.svg?v=2" />
+    <link rel="icon" type="image/png" href="/mark.png" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="top">
       <div class="top-inner">
         <div class="brand">
-          <img src="/mark.svg" alt="" width="30" height="30" />
+          <img src="/mark.png" alt="" width="30" height="30" />
           <div class="brand-text">
             <strong>Vorela</strong>
           </div>
@@ -38,7 +38,6 @@
         <div class="heading">
           <div class="heading-copy">
             <h1 id="desk-title">直播控制台</h1>
-            <p class="heading-sub">实时监看角色画面、自动欢迎与定时演唱调度、抖音 / TikTok / YouTube 互动。</p>
           </div>
           <div class="actions">
             <button id="copyStage" class="btn-pill-secondary">
@@ -60,370 +59,345 @@
         </div>
 
         <div class="bento-sheet desk-bento">
-          <!-- Cell 1 (Top-Left, span 4): 播出监看 -->
-          <section class="bento-cell cell-monitor" aria-labelledby="h-monitor">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <rect x="2.25" y="3.5" width="13.5" height="9.25" rx="2.2" />
-                  <path d="M6.5 15.25h5M9 12.75v2.5" />
-                </svg>
-              </span>
-              <span class="status-chip" id="previewType">未连接</span>
-            </div>
-            <h2 id="h-monitor">播出监看</h2>
-            <p class="cell-desc">查看本机参考图或云端实时回传帧。</p>
-
-            <div class="screen" id="screenBox">
-              <div class="guides" aria-hidden="true"></div>
-              <img id="poster" alt="角色监看" hidden />
-              <div class="empty" id="screenEmpty">
-                <div class="hub-diagram" aria-hidden="true">
-                  <svg class="hub-svg" viewBox="0 0 200 124" fill="none">
-                    <circle cx="100" cy="62" r="46" stroke="#E4E4EA" stroke-width="1" stroke-dasharray="2.5 3.5" />
-                    <line x1="100" y1="62" x2="100" y2="16" stroke="#E2E2E8" stroke-width="1" />
-                    <line x1="100" y1="62" x2="140" y2="39" stroke="#E2E2E8" stroke-width="1" />
-                    <line x1="100" y1="62" x2="140" y2="85" stroke="#E2E2E8" stroke-width="1" />
-                    <line x1="100" y1="62" x2="100" y2="108" stroke="#E2E2E8" stroke-width="1" />
-                    <line x1="100" y1="62" x2="60" y2="85" stroke="#E2E2E8" stroke-width="1" />
-                    <line x1="100" y1="62" x2="60" y2="39" stroke="#E2E2E8" stroke-width="1" />
-                    <circle cx="100" cy="16" r="8.5" fill="#FFFFFF" stroke="#E6E6EC" />
-                    <circle cx="100" cy="16" r="2.2" fill="#A1A1AA" />
-                    <circle cx="140" cy="39" r="8.5" fill="#FFFFFF" stroke="#E6E6EC" />
-                    <circle cx="140" cy="39" r="2.2" fill="#A1A1AA" />
-                    <circle cx="140" cy="85" r="8.5" fill="#FFFFFF" stroke="#E6E6EC" />
-                    <circle cx="140" cy="85" r="2.2" fill="#A1A1AA" />
-                    <circle cx="100" cy="108" r="8.5" fill="#FFFFFF" stroke="#E6E6EC" />
-                    <circle cx="100" cy="108" r="2.2" fill="#A1A1AA" />
-                    <circle cx="60" cy="85" r="8.5" fill="#FFFFFF" stroke="#E6E6EC" />
-                    <circle cx="60" cy="85" r="2.2" fill="#A1A1AA" />
-                    <circle cx="60" cy="39" r="8.5" fill="#FFFFFF" stroke="#E6E6EC" />
-                    <circle cx="60" cy="39" r="2.2" fill="#A1A1AA" />
-                    <circle cx="100" cy="62" r="19" fill="#18181B" />
-                    <circle cx="100" cy="62" r="23.5" stroke="#18181B" stroke-opacity="0.08" stroke-width="1" />
-                    <rect x="93.5" y="56.5" width="13" height="11" rx="2.5" stroke="#FFFFFF" stroke-width="1.5" />
-                    <circle cx="100" cy="62" r="2.4" fill="#FFFFFF" />
-                  </svg>
-                </div>
-                <b id="emptyTitle">等待角色画面</b>
-                <button id="chooseRole" class="pill-mini-dark">配置角色图</button>
-              </div>
-            </div>
-
-            <div class="monitor-foot">
-              <span class="stage-indicator">
-                <i class="stage-dot" id="stageDot" aria-hidden="true"></i>
-                <span id="outputState">舞台未打开</span>
-              </span>
-              <button id="openStage" class="text-button">
-                <span>打开舞台</span>
-                <svg class="ic-arrow" viewBox="0 0 14 14" aria-hidden="true">
-                  <path d="M4 10L10 4M5.2 4H10v4.8" />
-                </svg>
-              </button>
-            </div>
-          </section>
-
-          <!-- Cell 2 (Top-Right, span 8): 播出指令 -->
-          <section class="bento-cell cell-composer" aria-labelledby="h-composer">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <path d="M9 2.75a2.5 2.5 0 0 1 2.5 2.5v3.5a2.5 2.5 0 0 1-5 0v-3.5a2.5 2.5 0 0 1 2.5-2.5Z" />
-                  <path d="M4.75 8.75a4.25 4.25 0 0 0 8.5 0M9 13v2.5M6.75 15.5h4.5" />
-                </svg>
-              </span>
-              <button id="interrupt" class="cut" disabled>打断播出</button>
-            </div>
-            <h2 id="h-composer">播出指令</h2>
-            <p class="cell-desc">选择直接说话、AI 生成回复或触发人物动作，按 ⌘ Enter 快速送入播出队列。</p>
-
-            <div class="composer-body">
-              <div class="composer-bar">
-                <div id="modes" class="segmented" role="group" aria-label="指令模式">
-                  <button data-mode="say" aria-pressed="true">直接说话</button>
-                  <button data-mode="reply" aria-pressed="false">AI 回复</button>
-                  <button data-mode="action" aria-pressed="false">人物动作</button>
-                </div>
-                <span class="char-hint mono" id="charCount">0 / 600</span>
+          <div class="panel-column">
+            <section class="bento-cell cell-monitor" aria-labelledby="h-monitor">
+              <div class="cell-top">
+                <h2 id="h-monitor">播出监看</h2>
+                <span class="status-chip" id="previewType">未连接</span>
               </div>
 
-              <div class="row" id="quickActions" role="group" aria-label="常用动作" hidden>
-                <button type="button" id="restChin" data-action="用一只手轻托脸颊，头微微侧倾，看向镜头" disabled>托腮</button>
-                <button type="button" id="handHeart" data-action="双手在胸前比出爱心，微笑看向镜头" disabled>比心</button>
-                <button type="button" id="brushHair" data-action="抬起一只手，将脸侧的头发轻轻拨到耳后" disabled>撩头发</button>
-                <button type="button" id="wave" data-action="微笑看向镜头，抬起一只手左右挥动两次" disabled>挥手</button>
-                <button type="button" id="nod" data-action="看向镜头，轻轻点头两次" disabled>点头</button>
-              </div>
-
-              <label class="sr" for="line">播出内容</label>
-              <div class="composer-input-wrap">
-                <textarea id="line" rows="5" maxlength="600" placeholder="输入要说的话"></textarea>
-              </div>
-
-              <div class="row spread composer-actions">
-                <div class="row">
-                  <button id="audition">
-                    <svg class="ic" viewBox="0 0 16 16" aria-hidden="true">
-                      <path d="M3.5 6.2h2.2l3.1-2.5v8.6l-3.1-2.5H3.5a.8.8 0 0 1-.8-.8V7a.8.8 0 0 1 .8-.8Z" />
-                      <path d="M11.3 5.8a3.2 3.2 0 0 1 0 4.4M13 4.2a5.4 5.4 0 0 1 0 7.6" />
-                    </svg>
-                    <span>本机试听</span>
-                  </button>
-                  <button id="soundcheck">
-                    <svg class="ic" viewBox="0 0 16 16" aria-hidden="true">
-                      <path d="M2.5 8h2l1.6-3.8 2.4 7.6 1.8-3.8h3.2" />
-                    </svg>
-                    <span>舞台试音</span>
-                  </button>
-                </div>
-                <div class="row">
-                  <kbd class="shortcut-kbd" aria-hidden="true">⌘ ↵</kbd>
-                  <button class="primary" id="send" disabled>加入播出</button>
+              <div class="screen" id="screenBox">
+                <div class="guides" aria-hidden="true"></div>
+                <img id="poster" alt="角色监看" hidden />
+                <div class="empty" id="screenEmpty">
+                  <b id="emptyTitle">等待角色画面</b>
+                  <button id="chooseRole" class="pill-mini-dark">配置角色图</button>
                 </div>
               </div>
 
-              <audio id="audio" controls hidden></audio>
-            </div>
-          </section>
-
-          <!-- Cell 3 (Bottom-Left, span 4): 会话遥测 -->
-          <section class="bento-cell cell-session" aria-labelledby="h-session">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <path d="M2.5 9h3l1.75-4.5 2.5 9 1.75-4.5h4" />
-                </svg>
-              </span>
-              <span class="clock-pill mono" id="clock">00:00:00</span>
-            </div>
-            <h2 id="h-session">会话</h2>
-            <p class="cell-desc">实时追踪云端状态、帧率与结算指标。</p>
-
-            <dl class="facts">
-              <div>
-                <dt>云端状态</dt>
-                <dd id="message">—</dd>
-              </div>
-              <div>
-                <dt>输出画面</dt>
-                <dd id="dimensions">—</dd>
-              </div>
-              <div>
-                <dt>等待播出</dt>
-                <dd id="pending">—</dd>
-              </div>
-              <div>
-                <dt>排队至首段音频</dt>
-                <dd id="latency">—</dd>
-              </div>
-              <div>
-                <dt>云端结算</dt>
-                <dd id="bill">—</dd>
-              </div>
-            </dl>
-
-            <div class="panel-extra callout-warn" id="recovery" hidden>
-              <button id="recover" class="primary">核对云端并结束</button>
-              <button class="text-button" id="ack">已在 Vidu 控制台确认结束</button>
-            </div>
-            <div class="panel-extra callout-subtle" id="recordRow" hidden>
-              <button id="record">查询云端录播</button>
-              <span id="recordLinks" class="record-links"></span>
-            </div>
-
-            <div class="signal-strip" id="signalStrip" aria-hidden="true">
-              <div class="signal-eq">
-                <span></span><span></span><span></span><span></span><span></span>
-              </div>
-              <span class="signal-caption mono" id="signalCaption">待机 · 本机就绪</span>
-            </div>
-          </section>
-
-          <!-- Cell 4 (Bottom-Center, span 4): 素材、参考图与曲库 -->
-          <section class="bento-cell cell-tools" aria-labelledby="h-tools">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <rect x="2.75" y="3.25" width="12.5" height="11.5" rx="2.2" />
-                  <circle cx="6.75" cy="7.25" r="1.25" />
-                  <path d="M3.25 12.5l3.2-3.1 2.4 2.2 2.3-2.5 3.6 3.4" />
-                </svg>
-              </span>
-              <span class="meta-badge">素材控制</span>
-            </div>
-            <h2 id="h-tools">音频、参考图与曲库</h2>
-            <p class="cell-desc">推送播出音频、切换角色道具或背景，并管理授权曲库点播。</p>
-
-            <div class="tool-groups">
-              <div class="tool-block">
-                <div class="tool-label">播音与动作控制</div>
-                <div class="tool-row">
-                  <label class="file-button">
-                    选择播出音频
-                    <input type="file" id="media" accept="audio/*,video/mp4" />
-                  </label>
-                  <button id="reset">姿态复位</button>
-                  <button id="choreo">开始动作编排</button>
-                </div>
-              </div>
-
-              <div class="tool-block">
-                <div class="tool-label">实时参考图</div>
-                <div class="tool-row">
-                  <select id="refKind" aria-label="参考图用途">
-                    <option value="object">手持物</option>
-                    <option value="garment">服装</option>
-                    <option value="background">背景</option>
-                  </select>
-                  <label class="file-button">
-                    选择参考图
-                    <input type="file" id="reference" accept="image/png,image/jpeg,image/webp" />
-                  </label>
-                  <button id="removeRef">撤下参考图</button>
-                </div>
-              </div>
-
-              <div class="tool-block">
-                <div class="tool-head">
-                  <div class="tool-label">小柔演唱曲库（顺序轮播 / 点播）</div>
-                  <span id="trackCount" class="meta mono"></span>
-                </div>
-                <div class="tool-row">
-                  <label class="file-button">
-                    导入歌曲（多选）
-                    <input type="file" id="addTrack" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,video/mp4" multiple />
-                  </label>
-                  <label class="file-button">
-                    导入文件夹
-                    <input type="file" id="addTrackFolder" webkitdirectory multiple />
-                  </label>
-                </div>
-                <div class="tool-row">
-                  <select id="tracks" aria-label="演唱曲库" class="track-select"></select>
-                </div>
-                <div id="trackImportStatus" class="meta" role="status" hidden></div>
-                <details id="trackImportErrors" class="sub-disclosure" hidden>
-                  <summary>查看导入失败的文件</summary>
-                  <ul></ul>
-                </details>
-                <div class="tool-row">
-                  <button id="playTrack">演唱此首</button>
-                  <button id="previewTrack">试听</button>
-                  <button id="removeTrack">移除</button>
-                  <button id="clearTracks">清空</button>
-                </div>
-                <div class="mixer-row">
-                  <label class="mixer-item">
-                    <span>演唱音量 <b id="liveSongVolVal" class="mono">95%</b></span>
-                    <input id="liveSongVol" type="range" min="0" max="100" value="95" />
-                  </label>
-                  <label class="mixer-item mixer-sync">
-                    <span>同步偏移(ms)</span>
-                    <input id="liveSyncOffset" type="number" min="0" max="4000" step="50" value="800" />
-                  </label>
-                </div>
-              </div>
-
-              <div class="tool-block">
-                <div class="tool-head">
-                  <div class="tool-label">背景音乐 BGM（不驱口型 · 说话自动压低）</div>
-                  <span id="bgmCount" class="meta mono"></span>
-                </div>
-                <div class="tool-row">
-                  <label class="file-button">
-                    导入 BGM
-                    <input type="file" id="addBgm" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus" multiple />
-                  </label>
-                  <label class="file-button">
-                    导入文件夹
-                    <input type="file" id="addBgmFolder" webkitdirectory multiple />
-                  </label>
-                </div>
-                <div class="tool-row">
-                  <select id="bgmTracks" aria-label="背景音乐列表" class="track-select"></select>
-                </div>
-                <div id="bgmImportStatus" class="meta" role="status" hidden></div>
-                <details id="bgmImportErrors" class="sub-disclosure" hidden>
-                  <summary>查看导入失败的文件</summary>
-                  <ul></ul>
-                </details>
-                <div class="tool-row">
-                  <button id="toggleBgm">开启 BGM</button>
-                  <button id="nextBgm">下一首</button>
-                  <button id="previewBgm">试听</button>
-                  <button id="removeBgm">移除</button>
-                  <button id="clearBgm">清空</button>
-                </div>
-                <div class="mixer-row">
-                  <label class="mixer-item">
-                    <span>BGM 音量 <b id="liveBgmVolVal" class="mono">25%</b></span>
-                    <input id="liveBgmVol" type="range" min="0" max="100" value="25" />
-                  </label>
-                  <span id="bgmNow" class="meta bgm-now">未播放</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <!-- Cell 5 (Bottom-Right, span 4): 直播动态 -->
-          <section class="bento-cell cell-events" aria-labelledby="h-events">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <path d="M9 2.5l5.5 2.2v4.1c0 3.4-2.3 5.9-5.5 6.7-3.2-.8-5.5-3.3-5.5-6.7V4.7L9 2.5Z" />
-                  <path d="M6.8 9.1l1.5 1.5 3-3.2" />
-                </svg>
-              </span>
-              <div class="row event-top-actions">
-                <span class="status-chip mono" id="eventCount"></span>
-                <button type="button" id="clearEvents" class="btn-chip" hidden>清空动态</button>
-              </div>
-            </div>
-            <h2 id="h-events">直播动态</h2>
-            <p class="cell-desc">按时间顺序记录弹幕回复、动作指令与连线事件。</p>
-
-            <div id="events" class="event-list">
-              <div class="empty-events">
-                <span class="audit-pill"><i aria-hidden="true"></i>监听就绪</span>
-                <span class="empty-well" aria-hidden="true">
-                  <svg viewBox="0 0 20 20">
-                    <path d="M10 3.2l5.6 2.2v4.2c0 3.5-2.3 6.1-5.6 7-3.3-.9-5.6-3.5-5.6-7V5.4L10 3.2Z" />
-                    <path d="M7.8 10.1l1.5 1.5 3-3.1" />
-                  </svg>
+              <div class="monitor-foot">
+                <span class="stage-indicator">
+                  <i class="stage-dot" id="stageDot" aria-hidden="true"></i>
+                  <span id="outputState">舞台未打开</span>
                 </span>
-                <span class="empty-events-text">暂无直播事件</span>
+                <button id="openStage" class="text-button">
+                  <span>打开舞台</span>
+                  <svg class="ic-arrow" viewBox="0 0 14 14" aria-hidden="true">
+                    <path d="M4 10L10 4M5.2 4H10v4.8" />
+                  </svg>
+                </button>
               </div>
-            </div>
+            </section>
+            <section class="bento-cell cell-session" aria-labelledby="h-session">
+              <div class="cell-top">
+                <h2 id="h-session">会话</h2>
+                <span class="clock-pill mono" id="clock">00:00:00</span>
+              </div>
 
-            <details class="sub-disclosure sim-box">
-              <summary>模拟观众事件（抖音 / TikTok / YouTube）</summary>
-              <div class="sub-fields sim-fields">
-                <div class="sim-row">
-                  <select id="simPlatform" aria-label="模拟平台">
-                    <option value="douyin">抖音</option>
-                    <option value="tiktok">TikTok</option>
-                    <option value="youtube">YouTube</option>
-                  </select>
-                  <input id="simAuthor" value="小明" placeholder="用户名（如 小明 / Mike）" aria-label="模拟用户名" />
+              <dl class="facts">
+                <div>
+                  <dt>云端状态</dt>
+                  <dd id="message">—</dd>
                 </div>
-                <div class="sim-row">
-                  <input id="simGift" value="玫瑰" placeholder="礼物名称" aria-label="模拟礼物名称" />
-                  <input id="simCount" type="number" min="1" max="999" value="1" class="sim-count" aria-label="模拟礼物数量" />
+                <div>
+                  <dt>输出画面</dt>
+                  <dd id="dimensions">—</dd>
                 </div>
-                <input id="simText" placeholder="弹幕内容或礼物留言（可选）" aria-label="模拟弹幕内容" />
-                <div class="tool-row">
-                  <button type="button" id="simJoin">模拟进房</button>
-                  <button type="button" id="simGiftBtn">模拟送礼</button>
-                  <button type="button" id="simChat">模拟弹幕</button>
+                <div>
+                  <dt>等待播出</dt>
+                  <dd id="pending">—</dd>
                 </div>
-                <label class="check sim-keep">
-                  <input type="checkbox" id="keepEventsOnStart" />
-                  <span>开播时保留历史动态（未开播的事件不会触发播报）</span>
-                </label>
+                <div>
+                  <dt>首段音频等待时间</dt>
+                  <dd id="latency">—</dd>
+                </div>
+                <div>
+                  <dt>云端结算</dt>
+                  <dd id="bill">—</dd>
+                </div>
+              </dl>
+
+              <div class="panel-extra callout-warn" id="recovery" hidden>
+                <button id="recover" class="primary">核对云端并结束</button>
+                <button class="text-button" id="ack">已在 Vidu 控制台确认结束</button>
               </div>
-            </details>
-          </section>
+              <div class="panel-extra callout-subtle" id="recordRow" hidden>
+                <button id="record">查询云端录播</button>
+                <span id="recordLinks" class="record-links"></span>
+              </div>
+
+              <div class="signal-strip" id="signalStrip" aria-hidden="true">
+                <div class="signal-eq">
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <span class="signal-caption mono" id="signalCaption">待机 · 本机就绪</span>
+              </div>
+            </section>
+            <section class="bento-cell cell-events" aria-labelledby="h-events">
+              <div class="cell-top">
+                <h2 id="h-events">直播动态</h2>
+                <div class="row event-top-actions">
+                  <span class="status-chip mono" id="eventCount"></span>
+                  <button type="button" id="clearEvents" class="btn-chip" hidden>清空动态</button>
+                </div>
+              </div>
+
+              <div id="events" class="event-list">
+                <div class="empty-events">暂无直播事件</div>
+              </div>
+
+              <details class="sub-disclosure sim-box">
+                <summary>模拟观众事件（抖音 / TikTok / YouTube）</summary>
+                <div class="sub-fields sim-fields">
+                  <div class="sim-row">
+                    <select id="simPlatform" aria-label="模拟平台">
+                      <option value="douyin">抖音</option>
+                      <option value="tiktok">TikTok</option>
+                      <option value="youtube">YouTube</option>
+                    </select>
+                    <input id="simAuthor" value="小明" placeholder="用户名（如 小明 / Mike）" aria-label="模拟用户名" />
+                  </div>
+                  <div class="sim-row">
+                    <input id="simGift" value="玫瑰" placeholder="礼物名称" aria-label="模拟礼物名称" />
+                    <input id="simCount" type="number" min="1" max="999" value="1" class="sim-count" aria-label="模拟礼物数量" />
+                  </div>
+                  <input id="simText" placeholder="弹幕内容或礼物留言（可选）" aria-label="模拟弹幕内容" />
+                  <div class="tool-row">
+                    <button type="button" id="simJoin">模拟进房</button>
+                    <button type="button" id="simGiftBtn">模拟送礼</button>
+                    <button type="button" id="simChat">模拟弹幕</button>
+                  </div>
+                  <label class="check sim-keep">
+                    <input type="checkbox" id="keepEventsOnStart" />
+                    <span>开播时保留历史动态（未开播的事件不会触发播报）</span>
+                  </label>
+                </div>
+              </details>
+            </section>
+          </div>
+          <div class="panel-column">
+            <section class="bento-cell cell-composer" aria-labelledby="h-composer">
+              <div class="cell-top">
+                <h2 id="h-composer">插入指令</h2>
+                <button id="interrupt" class="cut" disabled>打断播出</button>
+              </div>
+
+              <div class="composer-body">
+                <div class="composer-bar">
+                  <div id="modes" class="segmented" role="group" aria-label="指令模式">
+                    <button data-mode="say" aria-pressed="true">直接说话</button>
+                    <button data-mode="reply" aria-pressed="false">AI 回复</button>
+                    <button data-mode="action" aria-pressed="false">人物动作</button>
+                  </div>
+                  <span class="char-hint mono" id="charCount">0 / 600</span>
+                </div>
+
+                <div class="row wrap-row" id="quickActions" role="group" aria-label="常用动作" hidden>
+                  <button type="button" id="restChin" data-action="用一只手轻托脸颊，头微微侧倾，看向镜头" disabled>托腮</button>
+                  <button type="button" id="handHeart" data-action="双手在胸前比出爱心，微笑看向镜头" disabled>比心</button>
+                  <button type="button" id="brushHair" data-action="抬起一只手，将脸侧的头发轻轻拨到耳后" disabled>撩头发</button>
+                  <button type="button" id="wave" data-action="微笑看向镜头，抬起一只手左右挥动两次" disabled>挥手</button>
+                  <button type="button" id="nod" data-action="看向镜头，轻轻点头两次" disabled>点头</button>
+                  <button type="button" id="readChat" data-action="上身稍稍靠近镜头，视线移向画面下方，停一拍再抬眼" disabled>凑近看弹幕</button>
+                  <button type="button" id="coverSmile" data-action="眼睛笑弯，一只手轻遮嘴角，笑过后自然放下" disabled>掩嘴笑</button>
+                  <button type="button" id="peaceSign" data-action="抬起一只手，在脸旁比出剪刀手" disabled>比耶</button>
+                  <button type="button" id="palmsThanks" data-action="双手在胸前轻轻合十，看向镜头笑着低一下头" disabled>合掌谢礼</button>
+                  <button type="button" id="wink" data-action="看向镜头，俏皮地眨一只眼，再轻轻一笑" disabled>眨眼放电</button>
+                  <button type="button" id="shyGlance" data-action="低下眼睛抿嘴一笑，停一拍再抬眼看向镜头" disabled>低头浅笑</button>
+                  <button type="button" id="frameFace" data-action="双手掌心朝上，在下巴两侧张开成花朵状，歪头微笑" disabled>花式捧脸</button>
+                  <button type="button" id="sway" data-action="放松双肩，跟着节拍左右轻晃上身两下" disabled>轻晃跟拍</button>
+                  <button type="button" id="fingerHeart" data-action="在脸旁用一只手的拇指和食指交叠比出小爱心，朝镜头轻轻送出" disabled>指尖比心</button>
+                  <button type="button" id="blowKiss" data-action="指尖轻触嘴唇，再朝镜头送出一个飞吻" disabled>飞吻</button>
+                </div>
+
+                <label class="sr" for="line">播出内容</label>
+                <div class="composer-input-wrap">
+                  <textarea id="line" rows="5" maxlength="600" placeholder="输入要说的话"></textarea>
+                </div>
+
+                <div class="row spread composer-actions">
+                  <div class="row">
+                    <button id="audition">
+                      <svg class="ic" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M3.5 6.2h2.2l3.1-2.5v8.6l-3.1-2.5H3.5a.8.8 0 0 1-.8-.8V7a.8.8 0 0 1 .8-.8Z" />
+                        <path d="M11.3 5.8a3.2 3.2 0 0 1 0 4.4M13 4.2a5.4 5.4 0 0 1 0 7.6" />
+                      </svg>
+                      <span>本机试听</span>
+                    </button>
+                    <button id="soundcheck">
+                      <svg class="ic" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M2.5 8h2l1.6-3.8 2.4 7.6 1.8-3.8h3.2" />
+                      </svg>
+                      <span>舞台试音</span>
+                    </button>
+                  </div>
+                  <div class="row">
+                    <kbd class="shortcut-kbd" aria-hidden="true">⌘ ↵</kbd>
+                    <button class="primary" id="send" disabled>加入播出</button>
+                  </div>
+                </div>
+
+                <audio id="audio" controls hidden></audio>
+              </div>
+            </section>
+            <section class="bento-cell" aria-labelledby="h-inbox">
+              <div class="cell-top"><h2 id="h-inbox">实时弹幕与礼物队列</h2></div>
+              <div id="audienceFeed" class="event-list"><div class="empty-events">等待弹幕或礼物</div></div>
+            </section>
+          </div>
+          <div class="panel-column">
+            <section class="bento-cell cell-tools" aria-labelledby="h-tools">
+              <div class="cell-top">
+                <h2 id="h-tools">音频、参考图与曲库</h2>
+              </div>
+
+              <div class="tool-groups">
+                <div class="tool-block online-music">
+                  <div class="tool-head">
+                    <div class="tool-label">在线歌单与点歌</div>
+                    <select id="musicProvider" aria-label="音乐平台"><option value="netease">网易云音乐</option><option value="qq">QQ 音乐</option></select>
+                  </div>
+                  <div class="tool-row">
+                    <input id="musicTerm" placeholder="歌名或歌手" aria-label="歌名或歌手" maxlength="100" />
+                    <button id="searchMusic">搜歌</button>
+                  </div>
+                  <div id="musicMatches" hidden><div class="tool-row">
+                    <select id="musicResults" class="track-select" aria-label="搜索结果"></select>
+                    <button id="requestMusic">点播</button>
+                  </div></div>
+                  <div id="bgmQueue" class="meta" role="status"></div>
+                  <div class="tool-row">
+                    <input id="musicPlaylist" placeholder="歌单详情链接或 ID" aria-label="歌单详情链接或 ID" />
+                    <button id="importPlaylist">导入歌单</button>
+                  </div>
+                  <div class="tool-row">
+                    <button id="toggleBgm">开启 BGM</button>
+                    <button id="nextBgm">下一首</button>
+                  </div>
+                  <details id="musicAccount" class="sub-disclosure" hidden open>
+                    <summary>账号 Cookie</summary>
+                    <div class="music-account-fields">
+                      <label>uin<input id="musicUin" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" /></label>
+                      <label>qqmusic_key<input id="musicKey" type="password" autocomplete="off" spellcheck="false" /></label>
+                    </div>
+                    <div class="tool-row">
+                      <button id="saveMusicCookie">保存 Cookie</button>
+                      <button id="clearMusicCookie" hidden>清除 Cookie</button>
+                    </div>
+                    <span id="musicAccountState" class="meta" role="status"></span>
+                  </details>
+                </div>
+
+                <div class="tool-block">
+                  <div class="tool-head">
+                    <div class="tool-label">舞蹈视频</div>
+                    <label class="file-button">导入视频<input id="danceImport" type="file" accept=".mp4,.mov,.webm" multiple /></label>
+                  </div>
+                  <div class="tool-row"><select id="danceSelect" class="track-select" aria-label="选择舞蹈视频"></select></div>
+                  <div class="tool-row">
+                    <button id="dancePlay" class="primary" disabled>播放舞蹈</button>
+                    <button id="danceStop" hidden>返回当前画面</button>
+                    <button id="danceRemove" disabled>移除</button>
+                  </div>
+                  <span id="danceStatus" class="meta" role="status"></span>
+                </div>
+
+                <div class="tool-block">
+                  <div class="tool-label">实时参考图</div>
+                  <div class="tool-row">
+                    <select id="refKind" aria-label="参考图用途">
+                      <option value="object">手持物</option>
+                      <option value="garment">服装</option>
+                      <option value="background">背景</option>
+                    </select>
+                    <label class="file-button">
+                      选择参考图
+                      <input type="file" id="reference" accept="image/png,image/jpeg,image/webp" />
+                    </label>
+                    <button id="removeRef">撤下参考图</button>
+                  </div>
+                </div>
+
+                <div class="tool-block">
+                  <div class="tool-head">
+                    <div class="tool-label">演唱曲库</div>
+                    <span id="trackCount" class="meta mono"></span>
+                  </div>
+                  <div class="tool-row">
+                    <label class="file-button">
+                      导入歌曲（多选）
+                      <input type="file" id="addTrack" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,video/mp4" multiple />
+                    </label>
+                    <label class="file-button">
+                      导入文件夹
+                      <input type="file" id="addTrackFolder" webkitdirectory multiple />
+                    </label>
+                  </div>
+                  <div class="tool-row">
+                    <select id="tracks" aria-label="演唱曲库" class="track-select"></select>
+                  </div>
+                  <div id="trackImportStatus" class="meta" role="status" hidden></div>
+                  <details id="trackImportErrors" class="sub-disclosure" hidden>
+                    <summary>查看导入失败的文件</summary>
+                    <ul></ul>
+                  </details>
+                  <div class="tool-row">
+                    <button id="playTrack">演唱此首</button>
+                    <button id="previewTrack">试听</button>
+                    <button id="removeTrack">移除</button>
+                    <button id="clearTracks">清空</button>
+                  </div>
+                  <div class="mixer-row">
+                    <label class="mixer-item">
+                      <span>演唱音量 <b id="liveSongVolVal" class="mono">95%</b></span>
+                      <input id="liveSongVol" type="range" min="0" max="100" value="95" />
+                    </label>
+                    <label class="mixer-item mixer-sync">
+                      <span>同步偏移(ms)</span>
+                      <input id="liveSyncOffset" type="number" min="0" max="4000" step="50" value="800" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="tool-block">
+                  <div class="tool-head">
+                    <div class="tool-label">背景音乐</div>
+                    <span id="bgmCount" class="meta mono"></span>
+                  </div>
+                  <div class="tool-row">
+                    <label class="file-button">
+                      导入 BGM
+                      <input type="file" id="addBgm" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus" multiple />
+                    </label>
+                    <label class="file-button">
+                      导入文件夹
+                      <input type="file" id="addBgmFolder" webkitdirectory multiple />
+                    </label>
+                  </div>
+                  <div class="tool-row">
+                    <select id="bgmTracks" aria-label="背景音乐列表" class="track-select"></select>
+                  </div>
+                  <div id="bgmImportStatus" class="meta" role="status" hidden></div>
+                  <details id="bgmImportErrors" class="sub-disclosure" hidden>
+                    <summary>查看导入失败的文件</summary>
+                    <ul></ul>
+                  </details>
+                  <div class="tool-row">
+                    <button id="previewBgm">试听</button>
+                    <button id="removeBgm">移除</button>
+                    <button id="clearBgm">清空</button>
+                  </div>
+                  <div class="mixer-row">
+                    <label class="mixer-item">
+                      <span>BGM 音量 <b id="liveBgmVolVal" class="mono">25%</b></span>
+                      <input id="liveBgmVol" type="range" min="0" max="100" value="25" />
+                    </label>
+                    <span id="bgmNow" class="meta bgm-now">未播放</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </section>
 
@@ -431,7 +405,6 @@
         <div class="heading">
           <div class="heading-copy">
             <h1 id="config-title">直播设置</h1>
-            <p class="heading-sub">配置角色形象、本机语音对话模型、密钥凭据与 OBS 场景。</p>
           </div>
           <div class="actions">
             <button id="save" class="primary">
@@ -444,428 +417,377 @@
         </div>
 
         <form id="settings" class="bento-sheet settings-bento" autocomplete="off">
-          <!-- Cell 1 (Top-Left, span 6): 角色与画面 -->
-          <section class="bento-cell cell-avatar" aria-labelledby="h-avatar">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <circle cx="9" cy="6.25" r="2.75" />
-                  <path d="M3.75 14.75a5.25 5.25 0 0 1 10.5 0" />
-                </svg>
-              </span>
-              <span id="imageStatus" class="status-chip">尚未上传角色图</span>
-            </div>
-            <h2 id="h-avatar">角色与画面</h2>
-            <p class="cell-desc">上传单人角色参考图或绑定 Vidu 形象 ID，控制分辨率、连线时限与动作编排。</p>
-
-            <div class="fields">
-              <div class="field-upload">
-                <label for="image">角色图（PNG / JPEG / WebP，上限 8 MiB）</label>
-                <div class="upload-row">
-                  <input id="image" type="file" accept="image/png,image/jpeg,image/webp" />
-                  <button type="button" class="text-button text-danger" id="deleteImage" hidden>移除角色图</button>
-                </div>
+          <div class="panel-column">
+            <section class="bento-cell cell-avatar" aria-labelledby="h-avatar">
+              <div class="cell-top">
+                <h2 id="h-avatar">角色与画面</h2>
+                <span id="imageStatus" class="status-chip">尚未上传角色图</span>
               </div>
 
-              <div class="pair">
-                <label>
-                  <span>Vidu 形象 ID</span>
-                  <input name="avatar_id" placeholder="已创建形象时填写，优先于角色图" />
-                </label>
-                <label>
-                  <span>动作库 ID</span>
-                  <input name="action_library" placeholder="留空使用平台默认库" />
-                </label>
-              </div>
-
-              <div class="pair">
-                <label>
-                  <span>分辨率</span>
-                  <select name="resolution">
-                    <option>720p</option>
-                    <option>1080p</option>
-                    <option>2k</option>
-                  </select>
-                </label>
-                <label>
-                  <span>连线时限（分钟）</span>
-                  <input type="number" name="max_minutes" min="1" max="1440" required />
-                </label>
-              </div>
-
-              <div class="toggle-group">
-                <label class="check">
-                  <input name="recording" type="checkbox" />
-                  <span>请求云端录播</span>
-                </label>
-              </div>
-
-              <details class="sub-disclosure">
-                <summary>动作编排参数</summary>
-                <div class="sub-fields">
-                  <label>
-                    <span>动作顺序（每行一条）</span>
-                    <textarea name="actions" rows="3" placeholder="例如：挥手打招呼"></textarea>
-                  </label>
-                  <label>
-                    <span>动作间隔（秒）</span>
-                    <input name="action_gap" type="number" min="2" max="300" />
-                  </label>
-                </div>
-              </details>
-            </div>
-          </section>
-
-          <!-- Cell 2 (Top-Right, span 6): 互动与弹幕 -->
-          <section class="bento-cell cell-interact" aria-labelledby="h-interact">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <path d="M3.25 4.25h11.5a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H8.5l-3.25 2.5v-2.5h-2a1.5 1.5 0 0 1-1.5-1.5v-6a1.5 1.5 0 0 1 1.5-1.5Z" />
-                </svg>
-              </span>
-              <button type="button" id="startModel" class="btn-chip">启动本机对话</button>
-            </div>
-            <h2 id="h-interact">互动、自动播报与弹幕</h2>
-
-            <div class="fields">
-              <div class="pair">
-                <label>
-                  <span>直播平台（先选这一项）</span>
-                  <select name="live_platform" id="livePlatform" required>
-                    <option value="" disabled>请选择直播平台</option>
-                    <option value="douyin">抖音</option>
-                    <option value="youtube">YouTube</option>
-                    <option value="other">TikTok / 其他平台（外部工具接入）</option>
-                  </select>
-                </label>
-                <label>
-                  <span>收到普通弹幕后</span>
-                  <select name="audience_mode">
-                    <option value="review">仅显示，由主播处理</option>
-                    <option value="read">自动朗读</option>
-                    <option value="reply">自动生成回复</option>
-                  </select>
-                </label>
-              </div>
-              <label data-platform="douyin" hidden>
-                <span>抖音直播间号</span>
-                <input name="douyin_room" maxlength="200" spellcheck="false" placeholder="直播间号或 live.douyin.com 链接" />
-              </label>
-              <div class="service-banner" id="douyinState" data-platform="douyin" hidden></div>
-              <details class="sub-disclosure" data-platform="douyin" hidden>
-                <summary>高级：改用外部 douyinLive</summary>
-                <div class="sub-fields">
-                  <p class="meta">默认由 Vorela 直接连接直播间。只有内置连接失效、要临时换回外部 douyinLive 时才填程序路径，清空即恢复内置连接。</p>
-                  <label>
-                    <span>douyinLive 程序路径</span>
-                    <input name="douyin_program" spellcheck="false" autocomplete="off" placeholder="例如 /Users/你的用户名/douyinLive/douyinLive" />
-                  </label>
-                  <label>
-                    <span>douyinLive 端口</span>
-                    <input name="douyin_port" type="number" min="1" max="65535" required />
-                  </label>
-                </div>
-              </details>
-              <label data-platform="youtube" hidden>
-                <span>YouTube 直播视频 ID（API Key 在「连接凭据」里保存）</span>
-                <input name="youtube_video" maxlength="11" placeholder="11 位视频 ID" />
-              </label>
-              <p class="meta" data-platform="other" hidden>
-                由有授权的本机采集工具把弹幕推送进来。在「连接凭据」点「复制本机弹幕接入信息」，把地址和令牌填进采集工具。
-              </p>
-              <div class="service-banner" id="modelState"></div>
-              <div class="service-progress" id="modelProgress" hidden>
-                <div class="service-progress-row">
-                  <span id="modelProgressStep"></span>
-                  <span class="mono" id="modelProgressValue"></span>
-                </div>
-                <div class="meter" role="progressbar" aria-labelledby="modelProgressStep"><span></span></div>
-              </div>
-              <div class="pair">
-                <label>
-                  <span>语言模型接口</span>
-                  <input name="llm_endpoint" type="url" placeholder="完整的 chat/completions 地址" />
-                </label>
-                <label>
-                  <span>语言模型名称</span>
-                  <input name="llm_model" />
-                </label>
-              </div>
-              <label>
-                <span>话术档案</span>
-                <input name="prompt_profile" maxlength="64" pattern="[A-Za-z0-9_\-]+" required />
-              </label>
-              <details class="sub-disclosure">
-                <summary>编辑话术</summary>
-                <div class="sub-fields">
-                  <div id="promptSource" class="prompt-source mono" role="status"></div>
-                  <label class="lang-zh">
-                    <span>中文话术 JSON</span>
-                    <textarea id="prompt-zh" class="mono" rows="12" spellcheck="false" disabled></textarea>
-                  </label>
-                  <label class="lang-en" hidden>
-                    <span>English speech profile JSON</span>
-                    <textarea id="prompt-en" class="mono" rows="12" spellcheck="false" disabled></textarea>
-                  </label>
-                  <div class="pair">
-                    <button type="button" id="reloadPrompt">重新读取</button>
-                    <button type="button" id="savePrompt" disabled>保存话术</button>
+              <div class="fields">
+                <div class="field-upload">
+                  <label for="image">角色图（PNG / JPEG / WebP，上限 8 MiB）</label>
+                  <img id="avatarPreview" alt="已保存角色图" hidden />
+                  <div class="upload-row">
+                    <input id="image" type="file" accept="image/png,image/jpeg,image/webp" />
+                    <button type="button" class="text-button text-danger" id="deleteImage" hidden>移除角色图</button>
                   </div>
                 </div>
-              </details>
-              <div class="toggle-group">
-                <label class="check">
-                  <input type="checkbox" name="auto_welcome" />
-                  <span>不唱歌时定时欢迎</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" name="welcome_joins" />
-                  <span>进房偶尔欢迎（中文跳过英文名）</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" name="auto_thank_gifts" />
-                  <span>自动 AI 谢礼（唱歌时唱完统一谢）</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" name="auto_sing" />
-                  <span>定时自动唱歌</span>
-                </label>
-                <label class="check">
-                  <input type="checkbox" name="song_requests" />
-                  <span>接受弹幕「点歌 曲名」</span>
-                </label>
+
+                <div class="pair">
+                  <label>
+                    <span>Vidu 形象 ID</span>
+                    <input name="avatar_id" placeholder="已创建形象时填写，优先于角色图" />
+                  </label>
+                  <label>
+                    <span>动作库 ID</span>
+                    <input name="action_library" placeholder="留空使用平台默认库" />
+                  </label>
+                </div>
+
+                <div class="pair">
+                  <label>
+                    <span>分辨率</span>
+                    <select name="resolution">
+                      <option>720p</option>
+                      <option>1080p</option>
+                      <option>2k</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>连线时限（分钟）</span>
+                    <input type="number" name="max_minutes" min="1" max="1440" required />
+                  </label>
+                </div>
+
+                <div class="toggle-group">
+                  <label class="check">
+                    <input name="recording" type="checkbox" />
+                    <span>请求云端录播</span>
+                  </label>
+                </div>
+
+                <div id="viduKey"></div>
+                <div class="row wrap-row">
+                  <button id="checkVidu" type="button">核对 Vidu 余额</button>
+                  <span class="meta" id="balance"></span>
+                </div>
+              </div>
+            </section>
+            <section class="bento-cell cell-interact" aria-labelledby="h-interact">
+              <div class="cell-top">
+                <h2 id="h-interact">互动、自动播报与弹幕</h2>
               </div>
 
-              <div class="pair">
-                <label>
-                  <span>行为间最小间隔（秒）</span>
-                  <input type="number" name="utterance_gap" min="1" max="60" required />
+              <div class="fields">
+                <div class="pair">
+                  <label>
+                    <span>直播平台</span>
+                    <select name="live_platform" id="livePlatform" required>
+                      <option value="" disabled>请选择直播平台</option>
+                      <option value="douyin">抖音</option>
+                      <option value="youtube">YouTube</option>
+                      <option value="other">TikTok / 其他平台（外部工具接入）</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>收到普通弹幕后</span>
+                    <select name="audience_mode">
+                      <option value="review">仅显示，由主播处理</option>
+                      <option value="read">自动朗读</option>
+                      <option value="reply">自动生成回复</option>
+                    </select>
+                  </label>
+                </div>
+                <label data-platform="douyin" hidden>
+                  <span>抖音直播间号</span>
+                  <input name="douyin_room" maxlength="200" spellcheck="false" placeholder="直播间号或 live.douyin.com 链接" />
                 </label>
-                <label>
-                  <span>定时欢迎间隔（秒）</span>
-                  <input type="number" name="ambient_welcome_gap" min="10" max="600" required />
+                <div class="service-banner" id="douyinState" data-platform="douyin" hidden></div>
+                <details class="sub-disclosure" data-platform="douyin" hidden>
+                  <summary>高级：改用外部 douyinLive</summary>
+                  <div class="sub-fields">
+                    <p class="meta">默认由 Vorela 直接连接直播间。只有内置连接失效、要临时换回外部 douyinLive 时才填程序路径，清空即恢复内置连接。</p>
+                    <label>
+                      <span>douyinLive 程序路径</span>
+                      <input name="douyin_program" spellcheck="false" autocomplete="off" placeholder="例如 /Users/你的用户名/douyinLive/douyinLive" />
+                    </label>
+                    <label>
+                      <span>douyinLive 端口</span>
+                      <input name="douyin_port" type="number" min="1" max="65535" required />
+                    </label>
+                  </div>
+                </details>
+                <label data-platform="youtube" hidden>
+                  <span>YouTube 直播视频 ID</span>
+                  <input name="youtube_video" maxlength="11" placeholder="11 位视频 ID" />
                 </label>
+                <p class="meta" data-platform="other" hidden>
+                  在「环境配置」复制弹幕接入信息，将地址和令牌填入采集工具。
+                </p>
+                <label>
+                  <span>话术档案</span>
+                  <input name="prompt_profile" maxlength="64" pattern="[A-Za-z0-9_\-]+" required />
+                </label>
+                <details class="sub-disclosure">
+                  <summary>编辑话术</summary>
+                  <div class="sub-fields">
+                    <div id="promptSource" class="prompt-source mono" role="status"></div>
+                    <label class="lang-zh">
+                      <span>中文话术 JSON</span>
+                      <textarea id="prompt-zh" class="mono" rows="12" spellcheck="false" disabled></textarea>
+                    </label>
+                    <label class="lang-en" hidden>
+                      <span>English speech profile JSON</span>
+                      <textarea id="prompt-en" class="mono" rows="12" spellcheck="false" disabled></textarea>
+                    </label>
+                    <div class="pair">
+                      <button type="button" id="reloadPrompt">重新读取</button>
+                      <button type="button" id="savePrompt" disabled>保存话术</button>
+                    </div>
+                  </div>
+                </details>
+                <div class="toggle-group">
+                  <label class="check">
+                    <input type="checkbox" name="auto_welcome" />
+                    <span>不唱歌时定时欢迎</span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" name="welcome_joins" />
+                    <span>进房偶尔欢迎（中文跳过英文名）</span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" name="auto_thank_gifts" />
+                    <span>自动 AI 谢礼（唱歌时唱完统一谢）</span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" name="auto_sing" />
+                    <span>定时自动唱歌</span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" name="song_requests" />
+                    <span>接受弹幕「点歌 曲名」</span>
+                  </label>
+                </div>
+
+                <div class="pair">
+                  <label>
+                    <span>行为间最小间隔（秒）</span>
+                    <input type="number" name="utterance_gap" min="1" max="60" required />
+                  </label>
+                  <label>
+                    <span>定时欢迎间隔（秒）</span>
+                    <input type="number" name="ambient_welcome_gap" min="10" max="600" required />
+                  </label>
+                </div>
+                <div class="pair">
+                  <label>
+                    <span>进房欢迎冷却（秒）</span>
+                    <input type="number" name="join_welcome_gap" min="5" max="300" required />
+                  </label>
+                  <label>
+                    <span>定时唱歌间隔（秒）</span>
+                    <input type="number" name="auto_sing_gap" min="15" max="3600" required />
+                  </label>
+                </div>
+                <div class="pair">
+                  <label>
+                    <span>演唱出声方式</span>
+                    <select name="song_audio_mode">
+                      <option value="stage">舞台高音质原声（Vidu 驱动作 + 本地直出）</option>
+                      <option value="vidu">Vidu 原声直推（24kHz 单声道，免调偏移）</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>说话时 BGM 压低比例（%）</span>
+                    <input type="number" name="bgm_duck_percent" min="0" max="100" required />
+                  </label>
+                </div>
+                <div class="pair">
+                  <label>
+                    <span>演唱音画同步偏移（毫秒）</span>
+                    <input type="number" name="song_sync_offset_ms" min="0" max="4000" step="50" required />
+                  </label>
+                  <label>
+                    <span>演唱音量（%）</span>
+                    <input type="number" name="song_volume" min="0" max="100" required />
+                  </label>
+                </div>
+
+                <details class="sub-disclosure">
+                  <summary>唱歌神态</summary>
+                  <div class="sub-fields">
+                    <label class="lang-zh">
+                      <span>唱歌神态自然引导（留空则完全由 Vidu 自由发挥）</span>
+                      <input name="singing_action" placeholder="例如：自然投入地唱歌，神情柔和灵动，随旋律轻轻晃动" />
+                    </label>
+                    <label class="lang-en" hidden>
+                      <span>Singing demeanor guide (leave blank for Vidu auto)</span>
+                      <input name="singing_action_en" />
+                    </label>
+                    <label class="lang-zh">
+                      <span>唱完后神态衔接（留空则自然衔接）</span>
+                      <input name="post_sing_action" placeholder="例如：唱完歌微笑看向镜头，神态温柔放松" />
+                    </label>
+                    <label class="lang-en" hidden>
+                      <span>Post-song demeanor transition</span>
+                      <input name="post_sing_action_en" />
+                    </label>
+                  </div>
+                </details>
               </div>
-              <div class="pair">
-                <label>
-                  <span>进房欢迎冷却（秒）</span>
-                  <input type="number" name="join_welcome_gap" min="5" max="300" required />
-                </label>
-                <label>
-                  <span>定时唱歌间隔（秒）</span>
-                  <input type="number" name="auto_sing_gap" min="15" max="3600" required />
-                </label>
+            </section>
+          </div>
+          <div class="panel-column">
+            <section class="bento-cell" aria-labelledby="h-local">
+              <div class="cell-top"><h2 id="h-local">本机服务</h2></div>
+              <div class="service-launchers">
+                <div>
+                  <button type="button" id="startModel" class="btn-chip">启动本机对话</button>
+                  <div class="service-banner" id="modelState"></div>
+                  <div class="service-progress" id="modelProgress" hidden>
+                    <div class="service-progress-row">
+                      <span id="modelProgressStep"></span>
+                      <span class="mono" id="modelProgressValue"></span>
+                    </div>
+                    <div class="meter" role="progressbar" aria-labelledby="modelProgressStep"><span></span></div>
+                  </div>
+                </div>
+                <div>
+                  <button type="button" id="startVoice" class="btn-chip">启动本机 MLX</button>
+                  <div class="service-banner" id="voiceState"></div>
+                  <div class="service-progress" id="voiceProgress" hidden>
+                    <div class="service-progress-row">
+                      <span id="voiceProgressStep"></span>
+                      <span class="mono" id="voiceProgressValue"></span>
+                    </div>
+                    <div class="meter" role="progressbar" aria-labelledby="voiceProgressStep"><span></span></div>
+                  </div>
+                </div>
               </div>
-              <div class="pair">
+              <div class="fields model-fields">
+                <div class="pair">
+                  <label>
+                    <span>语言模型接口</span>
+                    <input name="llm_endpoint" type="url" placeholder="完整的 chat/completions 地址" />
+                  </label>
+                  <label>
+                    <span>语言模型名称</span>
+                    <input name="llm_model" />
+                  </label>
+                </div>
+              </div>
+            </section>
+            <section class="bento-cell cell-voice" aria-labelledby="h-voice">
+              <div class="cell-top">
+                <h2 id="h-voice">语音设置</h2>
+              </div>
+
+              <div class="fields">
                 <label>
-                  <span>演唱出声方式</span>
-                  <select name="song_audio_mode">
-                    <option value="stage">舞台高音质原声（Vidu 驱动作 + 本地直出）</option>
-                    <option value="vidu">Vidu 原声直推（24kHz 单声道，免调偏移）</option>
+                  <span>直播语言</span>
+                  <select name="live_language" id="liveLanguage">
+                    <option value="zh">中文直播（仅启用中文 TTS · 灵小柔）</option>
+                    <option value="en">英文直播（仅启用英文 TTS · Willow）</option>
                   </select>
                 </label>
                 <label>
-                  <span>说话时 BGM 压低比例（%）</span>
-                  <input type="number" name="bgm_duck_percent" min="0" max="100" required />
-                </label>
-              </div>
-              <div class="pair">
-                <label>
-                  <span>演唱音画同步偏移（毫秒）</span>
-                  <input type="number" name="song_sync_offset_ms" min="0" max="4000" step="50" required />
+                  <span>语音来源</span>
+                  <select name="tts_mode">
+                    <option value="mlx">MLX / 兼容语音服务</option>
+                    <option value="system">macOS 系统语音（本机试听）</option>
+                  </select>
                 </label>
                 <label>
-                  <span>演唱音量（%）</span>
-                  <input type="number" name="song_volume" min="0" max="100" required />
+                  <span>语音接口</span>
+                  <input name="tts_endpoint" type="url" />
                 </label>
+                <label class="lang-zh">
+                  <span>中文模型</span>
+                  <input name="tts_model" />
+                </label>
+                <label class="lang-zh">
+                  <span>中文音色</span>
+                  <input name="voice" />
+                </label>
+                <label class="lang-en" hidden>
+                  <span>英文模型</span>
+                  <input name="tts_model_en" />
+                </label>
+                <label class="lang-en" hidden>
+                  <span>英文音色</span>
+                  <input name="voice_en" />
+                </label>
+                <details class="sub-disclosure">
+                  <summary>兼容服务参考音色</summary>
+                  <div class="sub-fields">
+                    <label>
+                      <span>录音在语音服务上的路径</span>
+                      <input name="reference_audio" />
+                    </label>
+                    <label>
+                      <span>录音逐字稿</span>
+                      <textarea name="reference_text" rows="2"></textarea>
+                    </label>
+                  </div>
+                </details>
+              </div>
+            </section>
+          </div>
+          <div class="panel-column">
+            <section class="bento-cell cell-keys" aria-labelledby="h-keys">
+              <div class="cell-top">
+                <h2 id="h-keys">环境配置</h2>
+                <span class="audit-pill"><i aria-hidden="true"></i>本地 .env</span>
               </div>
 
-              <details class="sub-disclosure">
-                <summary>唱歌神态</summary>
-                <div class="sub-fields">
-                  <label class="lang-zh">
-                    <span>唱歌神态自然引导（留空则完全由 Vidu 自由发挥）</span>
-                    <input name="singing_action" placeholder="例如：自然投入地唱歌，神情柔和灵动，随旋律轻轻晃动" />
-                  </label>
-                  <label class="lang-en" hidden>
-                    <span>Singing demeanor guide (leave blank for Vidu auto)</span>
-                    <input name="singing_action_en" />
-                  </label>
-                  <label class="lang-zh">
-                    <span>唱完后神态衔接（留空则自然衔接）</span>
-                    <input name="post_sing_action" placeholder="例如：唱完歌微笑看向镜头，神态温柔放松" />
-                  </label>
-                  <label class="lang-en" hidden>
-                    <span>Post-song demeanor transition</span>
-                    <input name="post_sing_action_en" />
-                  </label>
-                </div>
-              </details>
-            </div>
-          </section>
+              <div class="fields" id="keys"></div>
 
-          <!-- Cell 3 (Bottom-Left, span 4): 语音 -->
-          <section class="bento-cell cell-voice" aria-labelledby="h-voice">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <path d="M4 7.5v3M7 4.75v8.5M10 6.25v5.5M13 3.75v10.5M15.5 7.5v3" />
-                </svg>
-              </span>
-              <button type="button" id="startVoice" class="btn-chip">启动本机 MLX</button>
-            </div>
-            <h2 id="h-voice">语音与直播环境</h2>
-            <p class="cell-desc">选择单一直播语言环境，中文与英文 TTS 不会共存，仅加载当前语言的语音模型。</p>
-
-            <div class="fields">
-              <div class="service-banner" id="voiceState"></div>
-              <div class="service-progress" id="voiceProgress" hidden>
-                <div class="service-progress-row">
-                  <span id="voiceProgressStep"></span>
-                  <span class="mono" id="voiceProgressValue"></span>
-                </div>
-                <div class="meter" role="progressbar" aria-labelledby="voiceProgressStep"><span></span></div>
+              <div class="cred-actions">
+                <button id="copyIngest" type="button" class="btn-full-subtle">复制弹幕接入信息</button>
               </div>
-              <label>
-                <span>直播语言环境（单选）</span>
-                <select name="live_language" id="liveLanguage">
-                  <option value="zh">中文直播（仅启用中文 TTS · 灵小柔）</option>
-                  <option value="en">英文直播（仅启用英文 TTS · Willow）</option>
-                </select>
-              </label>
-              <label>
-                <span>语音来源</span>
-                <select name="tts_mode">
-                  <option value="mlx">MLX / 兼容语音服务</option>
-                  <option value="system">macOS 系统语音（本机试听）</option>
-                </select>
-              </label>
-              <label>
-                <span>语音接口</span>
-                <input name="tts_endpoint" type="url" />
-              </label>
-              <label class="lang-zh">
-                <span>中文模型</span>
-                <input name="tts_model" />
-              </label>
-              <label class="lang-zh">
-                <span>中文音色</span>
-                <input name="voice" />
-              </label>
-              <label class="lang-en" hidden>
-                <span>英文模型</span>
-                <input name="tts_model_en" />
-              </label>
-              <label class="lang-en" hidden>
-                <span>英文音色</span>
-                <input name="voice_en" />
-              </label>
-              <details class="sub-disclosure">
-                <summary>兼容服务参考音色</summary>
-                <div class="sub-fields">
+            </section>
+            <section class="bento-cell cell-obs" aria-labelledby="h-obs">
+              <div class="cell-top">
+                <h2 id="h-obs">OBS 推流配置</h2>
+              </div>
+
+              <div class="fields">
+                <div class="pair">
                   <label>
-                    <span>录音在语音服务上的路径</span>
-                    <input name="reference_audio" />
+                    <span>本机 WebSocket 端口</span>
+                    <input id="obsPort" name="obs_port" type="number" min="1" max="65535" value="4455" required />
                   </label>
                   <label>
-                    <span>录音逐字稿</span>
-                    <textarea name="reference_text" rows="2"></textarea>
+                    <span>OBS WebSocket 密码</span>
+                    <input id="obsPass" type="password" autocomplete="new-password" placeholder="未设密码可留空" />
                   </label>
                 </div>
-              </details>
-            </div>
-          </section>
-
-          <!-- Cell 4 (Bottom-Center, span 4): 连接凭据 -->
-          <section class="bento-cell cell-keys" aria-labelledby="h-keys">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <circle cx="6.25" cy="10.75" r="3" />
-                  <path d="M8.5 8.5L14.5 2.5M12.25 4.75l2 2M14.25 2.75l1.5 1.5" />
-                </svg>
-              </span>
-              <span class="audit-pill"><i aria-hidden="true"></i>本地 .env</span>
-            </div>
-            <h2 id="h-keys">连接凭据与三平台接入</h2>
-            <p class="cell-desc">API 密钥保存在 .env；抖音 / TikTok / YouTube 外部采集端统一推送至 /api/ingest。</p>
-
-            <div class="fields" id="keys"></div>
-
-            <div class="cred-actions">
-              <div class="row wrap-row">
-                <button id="checkVidu" type="button">核对 Vidu 余额</button>
-                <span class="meta" id="balance"></span>
-              </div>
-              <button id="copyIngest" type="button" class="btn-full-subtle">复制本机弹幕接入信息（抖音/TikTok/YouTube）</button>
-            </div>
-          </section>
-
-          <!-- Cell 5 (Bottom-Right, span 4): OBS 场景 -->
-          <section class="bento-cell cell-obs" aria-labelledby="h-obs">
-            <div class="cell-top">
-              <span class="cell-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18">
-                  <circle cx="9" cy="9" r="6" />
-                  <circle cx="9" cy="9" r="2.2" />
-                </svg>
-              </span>
-              <span class="meta-badge mono">WS v5</span>
-            </div>
-            <h2 id="h-obs">OBS 场景与开播</h2>
-            <p class="cell-desc">连接本机 OBS WebSocket，建立「Vorela · 数字人」浏览器源，填好推流码后直接在这里开播。</p>
-
-            <div class="fields">
-              <div class="pair">
+                <div class="row wrap-row">
+                  <button id="openObs" type="button">打开 OBS</button>
+                  <button id="setupObs" type="button">建立 Vorela 场景</button>
+                  <span class="meta" id="obsStatus"></span>
+                </div>
+                <p class="meta obs-missing" id="obsMissing" hidden>
+                  这台 Mac 上没有找到 OBS Studio。<a href="https://obsproject.com/download" target="_blank" rel="noopener noreferrer">下载 OBS</a>，装好后再点「打开 OBS」。
+                </p>
                 <label>
-                  <span>本机 WebSocket 端口</span>
-                  <input id="obsPort" name="obs_port" type="number" min="1" max="65535" value="4455" required />
+                  <span>推流地址（服务器）</span>
+                  <input id="streamServer" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="rtmp://… 直播平台给的服务器地址" />
                 </label>
                 <label>
-                  <span>OBS WebSocket 密码</span>
-                  <input id="obsPass" type="password" autocomplete="new-password" placeholder="未设密码可留空" />
+                  <span>推流码（串流密钥）</span>
+                  <input id="streamKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="直播平台给的推流码" />
                 </label>
+                <div class="row wrap-row">
+                  <button id="saveStream" type="button">保存到 OBS</button>
+                  <button id="obsLive" type="button" class="primary" disabled>开始直播</button>
+                </div>
+                <div class="service-banner" id="streamState"></div>
               </div>
-              <div class="row wrap-row">
-                <button id="openObs" type="button">打开 OBS</button>
-                <button id="setupObs" type="button">建立 Vorela 场景</button>
-                <span class="meta" id="obsStatus"></span>
-              </div>
-              <p class="meta obs-missing" id="obsMissing" hidden>
-                这台 Mac 上没有找到 OBS Studio。<a href="https://obsproject.com/download" target="_blank" rel="noopener noreferrer">下载 OBS</a>，装好后再点「打开 OBS」。
-              </p>
-              <label>
-                <span>推流地址（服务器）</span>
-                <input id="streamServer" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="rtmp://… 直播平台给的服务器地址" />
-              </label>
-              <label>
-                <span>推流码（串流密钥）</span>
-                <input id="streamKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="直播平台给的推流码" />
-              </label>
-              <div class="row wrap-row">
-                <button id="saveStream" type="button">保存到 OBS</button>
-                <button id="obsLive" type="button" class="primary" disabled>开始直播</button>
-              </div>
-              <div class="service-banner" id="streamState"></div>
-            </div>
 
-            <div class="obs-flow" aria-hidden="true">
-              <div class="obs-node">
-                <span class="obs-node-mark">A3</span>
-                <span class="mono">Stage</span>
-              </div>
-              <div class="obs-wire"><span></span></div>
-              <div class="obs-node obs-node--center">
-                <span class="mono">WS</span>
-              </div>
-              <div class="obs-wire"><span></span></div>
-              <div class="obs-node">
-                <span class="obs-node-dot"></span>
-                <span class="mono">OBS</span>
-              </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </form>
 
         <div class="settings-foot">
