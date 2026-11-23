@@ -39,6 +39,9 @@ install -m 644 packaging/Vorela.icns "$app/Contents/Resources/Vorela.icns"
 install -m 644 LICENSE "$app/Contents/Resources/LICENSE"
 install -m 644 NOTICE.md "$app/Contents/Resources/NOTICE.md"
 install -m 644 README.md "$app/Contents/Resources/README.md"
+mkdir -p "$app/Contents/Resources/docs" "$app/Contents/Resources/web"
+install -m 644 docs/live-guide.md docs/development.md "$app/Contents/Resources/docs/"
+install -m 644 web/mark.png "$app/Contents/Resources/web/mark.png"
 install -m 644 scripts/inspect-recording.py "$app/Contents/Resources/inspect-recording.py"
 for asset in avatars/cn/xiaorou_knowledge_base.txt avatars/en/knowledge_base.txt avatars/{cn,en}/song_titles.txt; do
   if [[ -f "$asset" ]]; then
