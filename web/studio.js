@@ -160,6 +160,36 @@ function paintFeed(list, events, emptyLabel) {
   }
 }
 
+function paintMetrics(v) {
+  const m = v.metrics;
+  const latency = el("latency");
+  latency.textContent =
+    m.last_first_audio_ms === null ? "—" : t("{0} 秒", (m.last_first_audio_ms / 1000).toFixed(2));
+  const reply = m.last_reply;
+  latency.title = reply ? [
+    reply.queue_ms != null && t("排队 {0} ms", reply.queue_ms),
+    reply.first_token_ms != null && t("模型首字 {0} ms", reply.first_token_ms),
+    reply.first_sentence_ms != null && t("首句 {0} ms", reply.first_sentence_ms),
+    reply.tts_ms != null && t("语音合成 {0} ms", reply.tts_ms),
+    reply.prompt_tokens != null && t("输入 {0} token", reply.prompt_tokens),
+    reply.cached_tokens != null && t("缓存命中 {0} token", reply.cached_tokens),
+  ].filter(Boolean).join(" · ") : "";
+  el("dimensions").textContent = m.output_width
+    ? m.output_width +
+      " × " +
+      m.output_height +
+      (m.output_fps != null ? " · " + m.output_fps.toFixed(1) + " fps" : "")
+    : "—";
+  el("bill").textContent =
+    m.credits != null
+      ? t("{0} 积分", m.credits)
+      : m.billed_seconds != null
+        ? t("{0} 秒", m.billed_seconds)
+        : v.phase === "ended"
+          ? t("平台未回传金额")
+          : "—";
+}
+
 function paint(v) {
   state = v;
   paintOnlineBgm(v);
@@ -215,37 +245,11 @@ function paint(v) {
       caption.textContent = live
         ? v.singing
           ? t("直播中 · 正在演唱《{0}》", v.current_song || t("曲目"))
-          : t(v.voice_busy ? "直播中 · 语音播出" : "直播中 · 推流正常")
+          : t(v.voice_busy ? "直播中 · 语音播出" : "数字人已连线")
         : t(busy() ? "连线中 · 建立信令" : v.output ? "待机 · 舞台已连接" : "待机 · 本机就绪");
     }
   }
-  const m = v.metrics;
-  const latency = el("latency");
-  latency.textContent =
-    m.last_first_audio_ms === null ? "—" : t("{0} 秒", (m.last_first_audio_ms / 1000).toFixed(2));
-  const reply = m.last_reply;
-  latency.title = reply ? [
-    reply.queue_ms != null && t("排队 {0} ms", reply.queue_ms),
-    reply.first_token_ms != null && t("模型首字 {0} ms", reply.first_token_ms),
-    reply.first_sentence_ms != null && t("首句 {0} ms", reply.first_sentence_ms),
-    reply.tts_ms != null && t("语音合成 {0} ms", reply.tts_ms),
-    reply.prompt_tokens != null && t("输入 {0} token", reply.prompt_tokens),
-    reply.cached_tokens != null && t("缓存命中 {0} token", reply.cached_tokens),
-  ].filter(Boolean).join(" · ") : "";
-  el("dimensions").textContent = m.output_width
-    ? m.output_width +
-      " × " +
-      m.output_height +
-      (m.output_fps != null ? " · " + m.output_fps.toFixed(1) + " fps" : "")
-    : "—";
-  el("bill").textContent =
-    m.credits != null
-      ? t("{0} 积分", m.credits)
-      : m.billed_seconds != null
-        ? t("{0} 秒", m.billed_seconds)
-        : v.phase === "ended"
-          ? t("平台未回传金额")
-          : "—";
+  paintMetrics(v);
   el("recovery").hidden = v.phase !== "unconfirmed";
   el("recordRow").hidden = !(v.phase === "ended" && configuration?.settings.recording);
   if (!live && !v.dance?.started && frameUrl) {
@@ -714,15 +718,15 @@ action("removeRef", () => api("/api/command", { kind: "remove_reference" }));
 
 async function sendSimulated(kind) {
   const platform = el("simPlatform").value;
-  const author = el("simAuthor").value.trim() || "小明";
+  const author = el("simAuthor").value.trim();
   const text = el("simText").value.trim();
   const payload = { platform, kind, author };
   if (kind === "gift") {
-    payload.gift_name = el("simGift").value.trim() || "玫瑰";
+    payload.gift_name = el("simGift").value.trim();
     payload.gift_count = Math.max(1, Number(el("simCount").value) || 1);
     if (text) payload.text = text;
   } else if (kind === "chat") {
-    payload.text = text || (configuration?.settings.live_language === "en" ? "Hi, love your singing!" : "晚上好呀，唱首歌听听");
+    payload.text = text;
   }
   await api("/api/simulate", payload);
   await tick();

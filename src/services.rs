@@ -113,8 +113,7 @@ impl ModelService {
         };
         match self {
             Self::Voice => {
-                v["info"]["title"] == "Vorela Voice"
-                    && v["paths"].get("/v1/audio/speech").is_some()
+                v["info"]["title"] == "Vorela Voice" && v["paths"].get("/v1/audio/speech").is_some()
             }
             Self::Chat => v["data"].is_array(),
         }
@@ -139,9 +138,7 @@ impl ModelService {
                     let _ = old.kill().await;
                     let _ = old.wait().await;
                 } else {
-                    anyhow::bail!(
-                        "本机语音端口 19849 正运行另一语言实例，请先结束旧进程后再启动"
-                    );
+                    anyhow::bail!("本机语音端口 19849 正运行另一语言实例，请先结束旧进程后再启动");
                 }
             } else {
                 return Ok("本机服务已就绪");
@@ -156,12 +153,12 @@ impl ModelService {
         config::prepare_dir(&dir)?;
         config::atomic(
             &dir.join("model_fetch.py"),
-            include_bytes!("../scripts/model_fetch.py"),
+            include_bytes!("../runtime/models/model_fetch.py"),
         )?;
         if matches!(self, Self::Voice) {
             config::atomic(
                 &dir.join("voice-service.py"),
-                include_bytes!("../scripts/voice-service.py"),
+                include_bytes!("../runtime/models/voice-service.py"),
             )?;
         }
         match fs::remove_file(dir.join("progress.json")) {
@@ -176,7 +173,7 @@ impl ModelService {
         let mut cmd = tokio::process::Command::new("/bin/bash");
         cmd.args([
             "-c",
-            include_str!("../scripts/start-model.sh"),
+            include_str!("../runtime/models/start-model.sh"),
             "vorela",
             self.name(),
         ])

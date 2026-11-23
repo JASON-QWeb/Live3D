@@ -1,3 +1,10 @@
+function sendReceipt(client, token, id, state) {
+  return fetch("/api/stage/dance/" + id, {
+    method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ client, state }),
+  });
+}
+
 export function dancePlayer(client, token, setAudio) {
   const layer = document.getElementById("danceLayer"), unlock = document.getElementById("danceUnlock");
   let current = null;
@@ -16,10 +23,7 @@ export function dancePlayer(client, token, setAudio) {
     if (current !== item || item.reporting) return;
     item.reporting = true;
     try {
-      const response = await fetch("/api/stage/dance/" + item.id, {
-        method: "POST", headers: { Authorization: "Bearer " + token(), "Content-Type": "application/json" },
-        body: JSON.stringify({ client, state }),
-      });
+      const response = await sendReceipt(client, token(), item.id, state);
       if (response.ok && state === "playing") item.ack = true;
     } catch {} finally {
       item.reporting = false;

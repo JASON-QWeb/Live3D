@@ -2,6 +2,6 @@
 /dist/
 .DS_Store
 .env
-avatars
-output
-design
+/avatars/
+/output/
+/design/

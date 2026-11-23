@@ -65,12 +65,16 @@ fn js(s: &'static str) -> impl IntoResponse {
         s,
     )
 }
-pub fn router(app: App, port: u16) -> Router {
-    Router::new()
-        .route(
-            "/",
-            get(|| async { Html(include_str!("../web/index.html")) }),
+fn web_assets() -> Router<App> {
+    static INDEX: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+        include_str!("../web/index.html").replace(
+            "<!-- settings-panel -->",
+            include_str!("../web/settings.html").trim_end(),
         )
+    });
+
+    Router::new()
+        .route("/", get(|| async { Html(INDEX.as_str()) }))
         .route(
             "/stage",
             get(|| async { Html(include_str!("../web/stage.html")) }),
@@ -117,7 +121,12 @@ pub fn router(app: App, port: u16) -> Router {
             get(|| async {
                 (
                     [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
-                    include_str!("../web/style.css"),
+                    concat!(
+                        include_str!("../web/styles/base.css"),
+                        include_str!("../web/styles/studio.css"),
+                        include_str!("../web/styles/settings.css"),
+                        include_str!("../web/styles/dialogs-and-layout.css"),
+                    ),
                 )
             }),
         )
@@ -134,14 +143,13 @@ pub fn router(app: App, port: u16) -> Router {
                 )
             }),
         )
+}
+
+pub fn router(app: App, port: u16) -> Router {
+    web_assets()
         .route(
             "/health",
-            get(|| async {
-                (
-                    [("x-vorela-version", env!("CARGO_PKG_VERSION"))],
-                    "vorela",
-                )
-            }),
+            get(|| async { ([("x-vorela-version", env!("CARGO_PKG_VERSION"))], "vorela") }),
         )
         .merge(api::routes())
         .layer(middleware::from_fn_with_state((app.clone(), port), guard))

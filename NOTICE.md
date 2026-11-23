@@ -11,3 +11,27 @@ Vidu 云端数字人服务由用户使用自己的账户接入，计费和使用
 抖音弹幕连接（`src/douyin/` 的签名、参数拼接、页面解析和消息格式）移植自 douyinLive 的 commit af34f7c，原作者今晚打打，MIT 许可证。protobuf 字段编号取自 douyinlive-proto v0.1.3。`src/douyin/recorded/` 里的对照数据是用 rust-anything 记录的 douyinLive 原版输出。这些都不是抖音官方接口，使用时应遵守抖音的用户协议。[douyinLive](https://github.com/jwwsjlm/douyinLive) · [douyinlive-proto](https://github.com/jwwsjlm/douyinlive-proto) · [rust-anything](https://github.com/erkamyaman/rust-anything)
 
 Rust 依赖版本由 Cargo.lock 固定。打包脚本按当前构建平台收集依赖的许可证正文，随应用存放于 Contents/Resources/ThirdParty.txt。
+
+## douyinLive
+
+MIT License
+
+Copyright (c) 2025 今晚打打
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

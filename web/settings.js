@@ -455,6 +455,11 @@ export function setupConfig(updated) {
         : t("设置已保存"),
     );
   });
+  bindAvatarControls();
+  bindServiceControls();
+}
+
+function bindAvatarControls() {
   el("image").onchange = async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -482,6 +487,9 @@ export function setupConfig(updated) {
     imgStatus.classList.remove("is-live");
     onUpdate();
   });
+}
+
+function bindServiceControls() {
   action("startModel", async () => {
     notify(tr((await api("/api/model", {})).message));
     await voiceStatus();

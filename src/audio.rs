@@ -309,8 +309,10 @@ mod tests {
 
     #[test]
     fn routes_strictly_by_live_language_without_mixing() {
-        let mut zh = Settings::default();
-        zh.live_language = "zh".into();
+        let zh = Settings {
+            live_language: "zh".into(),
+            ..Settings::default()
+        };
         for text in ["欢迎来到直播间！", "Welcome to the livestream!", "123"] {
             let body = speech_request(&zh, text);
             assert_eq!(body["model"], zh.tts_model);
@@ -318,8 +320,10 @@ mod tests {
             assert_eq!(body["lang_code"], "z");
         }
 
-        let mut en = Settings::default();
-        en.live_language = "en".into();
+        let en = Settings {
+            live_language: "en".into(),
+            ..Settings::default()
+        };
         for text in ["Welcome to the livestream!", "欢迎来到直播间！", "123"] {
             let body = speech_request(&en, text);
             assert_eq!(body["model"], en.tts_model_en);
@@ -330,10 +334,12 @@ mod tests {
 
     #[test]
     fn custom_reference_audio_follows_selected_language() {
-        let mut c = Settings::default();
-        c.live_language = "en".into();
-        c.reference_audio = "/audio/reference.wav".into();
-        c.reference_text = "Welcome.".into();
+        let c = Settings {
+            live_language: "en".into(),
+            reference_audio: "/audio/reference.wav".into(),
+            reference_text: "Welcome.".into(),
+            ..Settings::default()
+        };
         let body = speech_request(&c, "Welcome.");
         assert_eq!(body["model"], c.tts_model_en);
         assert_eq!(body["ref_audio"], c.reference_audio);
@@ -356,11 +362,20 @@ mod tests {
 
     #[test]
     fn detects_audio_formats_from_magic_and_extension() {
-        assert_eq!(detect_audio_ext(b"RIFF\x00\x00\x00\x00WAVEfmt ", None), Some("wav"));
-        assert_eq!(detect_audio_ext(b"fLaC\x00\x00\x00\x22", None), Some("flac"));
+        assert_eq!(
+            detect_audio_ext(b"RIFF\x00\x00\x00\x00WAVEfmt ", None),
+            Some("wav")
+        );
+        assert_eq!(
+            detect_audio_ext(b"fLaC\x00\x00\x00\x22", None),
+            Some("flac")
+        );
         assert_eq!(detect_audio_ext(b"ID3\x03\x00\x00", None), Some("mp3"));
         assert_eq!(detect_audio_ext(b"OggS\x00\x02", None), Some("ogg"));
-        assert_eq!(detect_audio_ext(b"\x00\x00\x00\x18ftypM4A ", None), Some("m4a"));
+        assert_eq!(
+            detect_audio_ext(b"\x00\x00\x00\x18ftypM4A ", None),
+            Some("m4a")
+        );
         assert_eq!(detect_audio_ext(b"unknown", Some("song.mp3")), Some("mp3"));
         assert_eq!(detect_audio_ext(b"unknown", Some("song.wma")), None);
         assert_eq!(mime_for_ext("flac"), "audio/flac");

@@ -1,6 +1,6 @@
 use crate::{
     audio::{checked, limited},
-    config::{key, now},
+    config::{Settings, key, now},
     director,
     replies::{Chat, Event},
     speech::{self, Job},
@@ -31,6 +31,15 @@ pub struct Incoming {
     pub gift_name: Option<String>,
     #[serde(default)]
     pub gift_count: Option<u32>,
+}
+
+impl Incoming {
+    fn gift_name(&self) -> Option<&str> {
+        self.gift_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -129,13 +138,6 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
     let kind = resolve_kind(&input)?;
     let plat = platform_label(input.platform.as_deref(), source)?;
 
-    let gift_name_clean = input
-        .gift_name
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
-    let gift_count = input.gift_count.unwrap_or(1).max(1);
-
     match kind {
         EventKind::Chat => {
             ensure!(
@@ -144,7 +146,7 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
             );
         }
         EventKind::Gift => {
-            let name = gift_name_clean.unwrap_or(text);
+            let name = input.gift_name().unwrap_or(text);
             ensure!(
                 !name.is_empty() && name.chars().count() <= 200 && text.chars().count() <= 600,
                 "礼物名称或留言无效"
@@ -175,178 +177,191 @@ pub fn receive(app: &App, input: Incoming, source: &str) -> Result<bool> {
     };
 
     match kind {
-        EventKind::Join => {
-            if !cfg.is_english() && has_english(author) {
+        EventKind::Join => receive_join(app, &cfg, plat, author, live),
+        EventKind::Gift => receive_gift(app, &cfg, plat, &input, live),
+        EventKind::Chat => receive_chat(app, &cfg, plat, &input, source, live)?,
+    }
+    Ok(true)
+}
+
+fn receive_join(app: &App, cfg: &Settings, plat: &str, author: &str, live: bool) {
+    if !cfg.is_english() && has_english(author) {
+        app.event(
+            format!("{plat}·进房"),
+            format!("{author}（中文环境已跳过英文用户名）"),
+        );
+        return;
+    }
+    app.event(format!("{plat}·进房"), author.to_owned());
+    if live
+        && cfg.welcome_joins
+        && cfg.tts_mode != "system"
+        && let Ok(run) = app.active()
+    {
+        let pending = lock(&app.view).pending;
+        let current = now();
+        let last_join = run.last_join_welcome_ms.load(Ordering::Relaxed);
+        let last_act = run.last_activity_ms.load(Ordering::Relaxed);
+        let join_cd = cfg.join_welcome_gap as u64 * 1000;
+        let act_gap = cfg.utterance_gap as u64 * 1000;
+        if !run.singing.load(Ordering::Relaxed)
+            && !run.busy.load(Ordering::Relaxed)
+            && pending == 0
+            && current.saturating_sub(last_join) >= join_cd
+            && current.saturating_sub(last_act) >= act_gap
+            && run
+                .last_join_welcome_ms
+                .compare_exchange(last_join, current, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+            && let Err(e) = speech::enqueue_in(
+                app,
+                &run,
+                Job::AutoReply {
+                    event: Event::Join(author.to_owned()),
+                    label: format!("进房欢迎 · {author}"),
+                },
+                false,
+            )
+        {
+            app.event("进房", format!("未排入欢迎：{e}"));
+        }
+    }
+}
+
+fn receive_gift(app: &App, cfg: &Settings, plat: &str, input: &Incoming, live: bool) {
+    let author = input.author.trim();
+    let text = input.text.trim();
+    let gift_count = input.gift_count.unwrap_or(1).max(1);
+    let gname = input.gift_name().unwrap_or(text);
+    let gift_desc = format_gift_desc(gname, gift_count, cfg.is_english());
+    let spoken_gift_desc = format_spoken_gift_desc(gname, gift_count, cfg.is_english());
+    let detail = if !text.is_empty() && text != gname {
+        format!("{author} · {gift_desc} · {text}")
+    } else {
+        format!("{author} · {gift_desc}")
+    };
+    app.event(format!("{plat}·礼物"), detail);
+    if live {
+        let safe_author = sanitize_author(author, cfg.is_english());
+        if let Ok(run) = app.active() {
+            if director::try_buffer_song_gift(
+                &run,
+                safe_author.clone(),
+                gname.to_owned(),
+                gift_count,
+            ) {
                 app.event(
-                    format!("{plat}·进房"),
-                    format!("{author}（中文环境已跳过英文用户名）"),
+                    "礼物暂存",
+                    format!("正在唱歌，{gift_desc} 已暂存至唱完后统一答谢"),
                 );
-                return Ok(true);
+                return;
             }
-            app.event(format!("{plat}·进房"), author.to_owned());
-            if live && cfg.welcome_joins && cfg.tts_mode != "system" {
-                if let Ok(run) = app.active() {
-                    let pending = lock(&app.view).pending;
-                    let current = now();
-                    let last_join = run.last_join_welcome_ms.load(Ordering::Relaxed);
-                    let last_act = run.last_activity_ms.load(Ordering::Relaxed);
-                    let join_cd = cfg.join_welcome_gap as u64 * 1000;
-                    let act_gap = cfg.utterance_gap as u64 * 1000;
-                    if !run.singing.load(Ordering::Relaxed)
-                        && !run.busy.load(Ordering::Relaxed)
-                        && pending == 0
-                        && current.saturating_sub(last_join) >= join_cd
-                        && current.saturating_sub(last_act) >= act_gap
-                        && run
-                            .last_join_welcome_ms
-                            .compare_exchange(
-                                last_join,
-                                current,
-                                Ordering::SeqCst,
-                                Ordering::Relaxed,
-                            )
-                            .is_ok()
-                    {
-                        if let Err(e) = speech::enqueue_in(
-                            app,
-                            &run,
-                            Job::AutoReply {
-                                event: Event::Join(author.to_owned()),
-                                label: format!("进房欢迎 · {author}"),
-                            },
-                            false,
-                        ) {
-                            app.event("进房", format!("未排入欢迎：{e}"));
-                        }
-                    }
-                }
-            }
-        }
-        EventKind::Gift => {
-            let gname = gift_name_clean.unwrap_or(text);
-            let gift_desc = format_gift_desc(gname, gift_count, cfg.is_english());
-            let spoken_gift_desc = format_spoken_gift_desc(gname, gift_count, cfg.is_english());
-            let detail = if !text.is_empty() && text != gname {
-                format!("{author} · {gift_desc} · {text}")
-            } else {
-                format!("{author} · {gift_desc}")
-            };
-            app.event(format!("{plat}·礼物"), detail);
-            if live {
-                let safe_author = sanitize_author(author, cfg.is_english());
-                if let Ok(run) = app.active() {
-                    if director::try_buffer_song_gift(
-                        &run,
-                        safe_author.clone(),
-                        gname.to_owned(),
-                        gift_count,
-                    ) {
-                        app.event(
-                            "礼物暂存",
-                            format!("正在唱歌，{gift_desc} 已暂存至唱完后统一答谢"),
-                        );
-                        return Ok(true);
-                    }
-                    let job = if cfg.auto_thank_gifts {
-                        if cfg.tts_mode != "system" {
-                            Some(Job::AutoReply {
-                                event: Event::Gift {
-                                    viewer: safe_author,
-                                    name: gname.to_owned(),
-                                    description: spoken_gift_desc,
-                                    count: gift_count,
-                                    comment: (!text.is_empty()
-                                        && text != gname
-                                        && text != gift_desc)
-                                        .then(|| text.to_owned()),
-                                },
-                                label: format!("感谢礼物 · {gift_desc}"),
-                            })
-                        } else {
-                            None
-                        }
-                    } else if cfg.audience_mode == "read" {
-                        let line = match safe_author {
-                            Some(name) if cfg.is_english() => {
-                                format!("Thank you {name} for {spoken_gift_desc}!")
-                            }
-                            Some(name) => format!("谢谢{name}送的{spoken_gift_desc}"),
-                            None if cfg.is_english() => {
-                                format!("Thank you for {spoken_gift_desc}!")
-                            }
-                            None => format!("谢谢老板送的{spoken_gift_desc}"),
-                        };
-                        Some(Job::Speak(line))
-                    } else {
-                        None
-                    };
-                    if let Some(j) = job
-                        && let Err(e) = speech::enqueue_in(app, &run, j, true)
-                    {
-                        app.event("礼物", format!("未排入感谢：{e}"));
-                    }
-                }
-            }
-        }
-        EventKind::Chat => {
-            app.event(format!("{plat}·弹幕"), format!("{author} · {text}"));
-            if live {
-                let requested = if cfg.song_requests {
-                    text.strip_prefix("点歌")
-                        .or_else(|| text.strip_prefix("!song "))
-                        .or_else(|| text.strip_prefix("song "))
-                        .map(|s| {
-                            s.trim()
-                                .trim_start_matches('：')
-                                .trim_start_matches(':')
-                                .trim()
-                        })
-                        .filter(|s| !s.is_empty())
+            let job = if cfg.auto_thank_gifts {
+                if cfg.tts_mode != "system" {
+                    Some(Job::AutoReply {
+                        event: Event::Gift {
+                            viewer: safe_author,
+                            name: gname.to_owned(),
+                            description: spoken_gift_desc,
+                            count: gift_count,
+                            comment: (!text.is_empty() && text != gname && text != gift_desc)
+                                .then(|| text.to_owned()),
+                        },
+                        label: format!("感谢礼物 · {gift_desc}"),
+                    })
                 } else {
                     None
-                };
-                let job = if let Some(title) = requested {
-                    let local = crate::library::list(app)?
-                        .into_iter()
-                        .find(|t| {
-                            t.title == title
-                                || crate::config::resolve_song_title(&cfg, &t.title)
-                                    .eq_ignore_ascii_case(title)
-                        })
-                        .map(|t| Job::Track(t.id));
-                    if local.is_none()
-                        && let Err(e) = crate::bgm::audience_request(app, title)
-                    {
-                        app.event("背景音乐点歌", e.to_string());
-                    }
-                    local
-                } else {
-                    let safe_author = sanitize_author(author, cfg.is_english());
-                    match cfg.audience_mode.as_str() {
-                        "read" => Some(Job::Speak(text.into())),
-                        "reply" => Some(Job::Reply(Chat {
-                            text: text.into(),
-                            viewer: safe_author,
-                            viewer_id: input
-                                .viewer_id
-                                .as_deref()
-                                .map(str::trim)
-                                .filter(|id| !id.is_empty() && id.len() <= 250)
-                                .map(|id| format!("{source}/{plat}/{id}")),
-                        })),
-                        _ => None,
-                    }
-                };
-                if let Some(j) = job
-                    && let Ok(run) = app.active()
-                    && let Err(e) = speech::enqueue_in(app, &run, j, false)
-                {
-                    app.event("弹幕", format!("未排入播出：{e}"));
                 }
+            } else if cfg.audience_mode == "read" {
+                let line = match safe_author {
+                    Some(name) if cfg.is_english() => {
+                        format!("Thank you {name} for {spoken_gift_desc}!")
+                    }
+                    Some(name) => format!("谢谢{name}送的{spoken_gift_desc}"),
+                    None if cfg.is_english() => {
+                        format!("Thank you for {spoken_gift_desc}!")
+                    }
+                    None => format!("谢谢老板送的{spoken_gift_desc}"),
+                };
+                Some(Job::Speak(line))
+            } else {
+                None
+            };
+            if let Some(j) = job
+                && let Err(e) = speech::enqueue_in(app, &run, j, true)
+            {
+                app.event("礼物", format!("未排入感谢：{e}"));
             }
         }
     }
-    Ok(true)
+}
+
+fn receive_chat(
+    app: &App,
+    cfg: &Settings,
+    plat: &str,
+    input: &Incoming,
+    source: &str,
+    live: bool,
+) -> Result<()> {
+    let author = input.author.trim();
+    let text = input.text.trim();
+    app.event(format!("{plat}·弹幕"), format!("{author} · {text}"));
+    if live {
+        let requested = if cfg.song_requests {
+            text.strip_prefix("点歌")
+                .or_else(|| text.strip_prefix("!song "))
+                .or_else(|| text.strip_prefix("song "))
+                .map(|s| {
+                    s.trim()
+                        .trim_start_matches('：')
+                        .trim_start_matches(':')
+                        .trim()
+                })
+                .filter(|s| !s.is_empty())
+        } else {
+            None
+        };
+        let job = if let Some(title) = requested {
+            let local = crate::library::list(app)?
+                .into_iter()
+                .find(|t| {
+                    t.title == title
+                        || crate::config::resolve_song_title(cfg, &t.title)
+                            .eq_ignore_ascii_case(title)
+                })
+                .map(|t| Job::Track(t.id));
+            if local.is_none()
+                && let Err(e) = crate::bgm::audience_request(app, title)
+            {
+                app.event("背景音乐点歌", e.to_string());
+            }
+            local
+        } else {
+            let safe_author = sanitize_author(author, cfg.is_english());
+            match cfg.audience_mode.as_str() {
+                "read" => Some(Job::Speak(text.into())),
+                "reply" => Some(Job::Reply(Chat {
+                    text: text.into(),
+                    viewer: safe_author,
+                    viewer_id: input
+                        .viewer_id
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|id| !id.is_empty() && id.len() <= 250)
+                        .map(|id| format!("{source}/{plat}/{id}")),
+                })),
+                _ => None,
+            }
+        };
+        if let Some(j) = job
+            && let Ok(run) = app.active()
+            && let Err(e) = speech::enqueue_in(app, &run, j, false)
+        {
+            app.event("弹幕", format!("未排入播出：{e}"));
+        }
+    }
+    Ok(())
 }
 async fn fetch(app: &App, path: &str, params: &[(&str, &str)], key: &str) -> Result<Value> {
     let r = app
@@ -543,6 +558,50 @@ mod tests {
         assert!(!receive(&app, dup, "local").unwrap());
     }
 
+    fn send_song_gifts(app: &App) {
+        for (id, author, name, count) in [
+            ("g-1", "小明", "玫瑰", 2),
+            ("g-2", "小明", "玫瑰", 3),
+            ("g-3", "Bob88", "火箭", 1),
+        ] {
+            receive(
+                app,
+                Incoming {
+                    id: id.into(),
+                    author: author.into(),
+                    viewer_id: None,
+                    text: String::new(),
+                    gift: true,
+                    kind: Some("gift".into()),
+                    platform: Some("douyin".into()),
+                    gift_name: Some(name.into()),
+                    gift_count: Some(count),
+                },
+                "local",
+            )
+            .unwrap();
+        }
+    }
+
+    fn join(app: &App, id: &str, author: &str) {
+        receive(
+            app,
+            Incoming {
+                id: id.into(),
+                author: author.into(),
+                viewer_id: None,
+                text: String::new(),
+                gift: false,
+                kind: Some("join".into()),
+                platform: Some("douyin".into()),
+                gift_name: None,
+                gift_count: None,
+            },
+            "local",
+        )
+        .unwrap();
+    }
+
     #[test]
     fn buffers_gifts_while_singing_and_does_not_interrupt_with_joins() {
         use crate::session::Run;
@@ -582,46 +641,10 @@ mod tests {
         app.phase("live", "ready");
 
         // While singing: join does not enqueue, gifts go to song_gifts buffer
-        receive(
-            &app,
-            Incoming {
-                id: "j-sing".into(),
-                author: "小美".into(),
-                viewer_id: None,
-                text: String::new(),
-                gift: false,
-                kind: Some("join".into()),
-                platform: Some("douyin".into()),
-                gift_name: None,
-                gift_count: None,
-            },
-            "local",
-        )
-        .unwrap();
+        join(&app, "j-sing", "小美");
         assert!(jrx.try_recv().is_err());
 
-        for (id, author, name, count) in [
-            ("g-1", "小明", "玫瑰", 2),
-            ("g-2", "小明", "玫瑰", 3),
-            ("g-3", "Bob88", "火箭", 1),
-        ] {
-            receive(
-                &app,
-                Incoming {
-                    id: id.into(),
-                    author: author.into(),
-                    viewer_id: None,
-                    text: String::new(),
-                    gift: true,
-                    kind: Some("gift".into()),
-                    platform: Some("douyin".into()),
-                    gift_name: Some(name.into()),
-                    gift_count: Some(count),
-                },
-                "local",
-            )
-            .unwrap();
-        }
+        send_song_gifts(&app);
         // Not sent to live gift speech queue yet!
         assert!(grx.try_recv().is_err());
         let buffered = lock(&run.song_gifts).clone();
@@ -634,59 +657,14 @@ mod tests {
         // When idle (not singing, not busy): Chinese join enqueues welcome, English join skipped
         run.singing.store(false, Ordering::SeqCst);
         run.busy.store(false, Ordering::SeqCst);
-        receive(
-            &app,
-            Incoming {
-                id: "j-en-idle".into(),
-                author: "Kevin".into(),
-                viewer_id: None,
-                text: String::new(),
-                gift: false,
-                kind: Some("join".into()),
-                platform: Some("douyin".into()),
-                gift_name: None,
-                gift_count: None,
-            },
-            "local",
-        )
-        .unwrap();
+        join(&app, "j-en-idle", "Kevin");
         assert!(jrx.try_recv().is_err());
 
-        receive(
-            &app,
-            Incoming {
-                id: "j-zh-idle".into(),
-                author: "阿花".into(),
-                viewer_id: None,
-                text: String::new(),
-                gift: false,
-                kind: Some("join".into()),
-                platform: Some("douyin".into()),
-                gift_name: None,
-                gift_count: None,
-            },
-            "local",
-        )
-        .unwrap();
+        join(&app, "j-zh-idle", "阿花");
         assert!(jrx.try_recv().is_ok());
 
         // Second join immediately after is skipped by cooldown
-        receive(
-            &app,
-            Incoming {
-                id: "j-zh-cd".into(),
-                author: "阿强".into(),
-                viewer_id: None,
-                text: String::new(),
-                gift: false,
-                kind: Some("join".into()),
-                platform: Some("douyin".into()),
-                gift_name: None,
-                gift_count: None,
-            },
-            "local",
-        )
-        .unwrap();
+        join(&app, "j-zh-cd", "阿强");
         assert!(jrx.try_recv().is_err());
     }
 }

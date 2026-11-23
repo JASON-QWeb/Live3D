@@ -7,14 +7,16 @@
 1. 把 douyinLive 克隆到临时目录，并提交一次，方便之后看改动：
 
    ```sh
+   export LIVE3D="$(pwd)"   # 从 Vorela 仓库根目录开始
    git clone https://github.com/jwwsjlm/douyinLive.git /tmp/dl && cd /tmp/dl
+   git checkout af34f7c   # 更新对照数据时改用要验证的提交
    ```
 
 2. 加上录制用的入口，只改这份临时副本：
 
    ```sh
-   git apply LIVE3D/third_party/douyinLive-recording/ab_sign_at.patch
-   cp LIVE3D/third_party/douyinLive-recording/golden_export.go .
+   git apply "$LIVE3D"/scripts/douyin/ab_sign_at.patch
+   cp "$LIVE3D"/scripts/douyin/golden_export.go .
    gofmt -w sign/ab_sign.go && go vet . ./sign/
    git add -A && git commit -m "recording wrappers"
    ```
@@ -28,7 +30,7 @@
    rust-anything bridge . sign/
    rust-anything bridge . golden_export.go
    for c in webcastsign sign golden-export; do
-     sed "s#LIVE3D#$LIVE3D#" "$LIVE3D/third_party/douyinLive-recording/ports/$c-rs.port.rs" > rust/$c-rs/src/port.rs
+     sed "s#LIVE3D#$LIVE3D#" "$LIVE3D/scripts/douyin/ports/$c-rs.port.rs" > rust/$c-rs/src/port.rs
      grep -q md-5 rust/$c-rs/Cargo.toml || sed -i '' 's/^\[dependencies\]$/[dependencies]\nmd5 = { package = "md-5", version = "0.10" }/' rust/$c-rs/Cargo.toml
    done
    ```
@@ -38,7 +40,7 @@
 4. 录制、编译、比对：
 
    ```sh
-   python3 "$LIVE3D/third_party/douyinLive-recording/make_inputs.py"
+   python3 "$LIVE3D/scripts/douyin/make_inputs.py"
    rust-anything record rust/webcastsign-rs --inputs webcastsign.jsonl
    rust-anything record rust/sign-rs --inputs sign.jsonl
    rust-anything record rust/golden-export-rs --inputs golden.jsonl

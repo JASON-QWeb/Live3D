@@ -113,8 +113,8 @@ pub async fn worker(app: App, run: Arc<Run>) {
                 if cfg.auto_sing {
                     let last_song = run.last_song_end_ms.load(Ordering::Relaxed);
                     let sing_gap_ms = cfg.auto_sing_gap as u64 * 1000;
-                    if last_song > 0 && current.saturating_sub(last_song) >= sing_gap_ms {
-                        if let Ok(tracks) = crate::library::list(&app)
+                    if last_song > 0 && current.saturating_sub(last_song) >= sing_gap_ms
+                        && let Ok(tracks) = crate::library::list(&app)
                             && !tracks.is_empty()
                         {
                             let idx =
@@ -130,12 +130,11 @@ pub async fn worker(app: App, run: Arc<Run>) {
                                 continue;
                             }
                         }
-                    }
                 }
 
                 // Priority 2: Ambient welcome while not singing
-                if cfg.auto_welcome && cfg.tts_mode != "system" {
-                    if let Ok(profile) = app.prompts.active(&cfg.prompt_profile, cfg.is_english())
+                if cfg.auto_welcome && cfg.tts_mode != "system"
+                    && let Ok(profile) = app.prompts.active(&cfg.prompt_profile, cfg.is_english())
                         && !profile.lines(Scene::Ambient).is_empty()
                     {
                         let welcome_gap_ms = cfg.ambient_welcome_gap as u64 * 1000;
@@ -155,7 +154,6 @@ pub async fn worker(app: App, run: Arc<Run>) {
                             );
                         }
                     }
-                }
             }
         }
     }

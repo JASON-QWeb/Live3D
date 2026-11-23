@@ -68,11 +68,11 @@ pub async fn add(app: &App, title: &str, ext_hint: Option<&str>, bytes: &[u8]) -
     let p_file = pcm_path(app, t.id);
     config::atomic(&p_file, &pcm)?;
     let s_file = (!t.source_ext.is_empty()).then(|| source_path(app, t.id, &t.source_ext));
-    if let Some(ref sf) = s_file {
-        if let Err(e) = config::atomic(sf, bytes) {
-            let _ = std::fs::remove_file(&p_file);
-            return Err(e);
-        }
+    if let Some(ref sf) = s_file
+        && let Err(e) = config::atomic(sf, bytes)
+    {
+        let _ = std::fs::remove_file(&p_file);
+        return Err(e);
     }
     tracks.push(t.clone());
     if let Err(e) = config::write_json(&app.dir.join("tracks.json"), &tracks) {

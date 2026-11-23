@@ -3,8 +3,8 @@
 //! - WebSocket `signature`: `internal/webcastsign/native.go`
 //! - HTTP `a_bogus`: `sign/ab_sign.go`, including its SM3
 //!
-//! This file depends only on std and `md-5`, so the recording crates in
-//! `third_party/douyinLive/rust/` compile it unchanged and check it against
+//! This file depends only on std and `md-5`, so the recording tools in
+//! `scripts/douyin/` compile it unchanged and check it against
 //! what the Go original returned.
 
 use md5::{Digest, Md5};

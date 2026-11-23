@@ -62,12 +62,8 @@ pub fn bgm_snapshot(app: &App) -> Value {
         "queue": items.iter().map(|t| json!({"id": t.id.to_string(), "title": t.title})).collect::<Vec<_>>(),
     })
 }
-pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
-    ensure!(
-        q.client.len() >= 16 && q.client.len() <= 80,
-        "输出端标识无效"
-    );
-    let status = match q.status.as_str() {
+fn output_status(q: &Report) -> Result<&'static str> {
+    Ok(match q.status.as_str() {
         "standby" => match q.rtc_supported {
             Some(true) => "舞台就绪 · WebRTC / H.264 可用",
             Some(false) => "舞台已连接，浏览器未通过 RTC 检测",
@@ -82,7 +78,14 @@ pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
         "lost" => "远端画面中断",
         "released" => "",
         _ => anyhow::bail!("输出端状态无效"),
-    };
+    })
+}
+pub fn heartbeat(app: &App, q: Report) -> Result<Value> {
+    ensure!(
+        q.client.len() >= 16 && q.client.len() <= 80,
+        "输出端标识无效"
+    );
+    let status = output_status(&q)?;
     let time = now();
     let (rtc, check, song) = {
         let mut s = lock(&app.screen);

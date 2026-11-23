@@ -61,6 +61,49 @@ pub fn signal(app: &App, t: u8, p: Value) -> Result<()> {
         .context("信令队列已满或已关闭")?;
     Ok(())
 }
+fn reset_view(app: &App, keep_events: bool) {
+    lock(&app.seen).clear();
+    lock(&app.screen).tone = None;
+    let mut view = lock(&app.view);
+    let kept_events = if keep_events {
+        view.events.clone()
+    } else {
+        Default::default()
+    };
+    let bgm_playing = view.bgm_playing;
+    let current_bgm = view.current_bgm.clone();
+    *view = View {
+        phase: "starting".into(),
+        message: "正在创建云端会话".into(),
+        started: now(),
+        events: kept_events,
+        bgm_playing,
+        current_bgm,
+        ..View::default()
+    };
+}
+async fn release_run(core: &App) {
+    let _g = core.gate.lock().await;
+    {
+        let mut sc = lock(&core.screen);
+        sc.rtc = None;
+        if sc.song.take().is_some() {
+            core.notify_stage(json!({"event": "song_stop"}));
+        }
+    }
+    {
+        let mut v = lock(&core.view);
+        v.subtitle.clear();
+        v.ended = now();
+        v.pending = 0;
+        v.choreo = false;
+        v.voice_busy = false;
+        v.singing = false;
+        v.current_song.clear();
+    }
+    core.notify_stage(json!({"event": "bgm_state", "bgm": crate::output::bgm_snapshot(core)}));
+    *lock(&core.run) = None;
+}
 pub async fn start(app: &App, keep_events: bool) -> Result<()> {
     let _g = app.gate.lock().await;
     ensure!(!app.quit.is_cancelled(), "Vorela 正在退出");
@@ -98,27 +141,7 @@ pub async fn start(app: &App, keep_events: bool) -> Result<()> {
         next_track_index: AtomicUsize::new(0),
     });
     *lock(&app.run) = Some(run.clone());
-    lock(&app.seen).clear();
-    lock(&app.screen).tone = None;
-    {
-        let mut view = lock(&app.view);
-        let kept_events = if keep_events {
-            view.events.clone()
-        } else {
-            Default::default()
-        };
-        let bgm_playing = view.bgm_playing;
-        let current_bgm = view.current_bgm.clone();
-        *view = View {
-            phase: "starting".into(),
-            message: "正在创建云端会话".into(),
-            started: now(),
-            events: kept_events,
-            bgm_playing,
-            current_bgm,
-            ..View::default()
-        };
-    }
+    reset_view(app, keep_events);
     let core = app.clone();
     let active = run.clone();
     tokio::spawn(async move {
@@ -143,26 +166,7 @@ pub async fn start(app: &App, keep_events: bool) -> Result<()> {
         let _ = worker.await;
         let _ = schedule.await;
         let _ = director.await;
-        let _g = core.gate.lock().await;
-        {
-            let mut sc = lock(&core.screen);
-            sc.rtc = None;
-            if sc.song.take().is_some() {
-                core.notify_stage(json!({"event": "song_stop"}));
-            }
-        }
-        {
-            let mut v = lock(&core.view);
-            v.subtitle.clear();
-            v.ended = now();
-            v.pending = 0;
-            v.choreo = false;
-            v.voice_busy = false;
-            v.singing = false;
-            v.current_song.clear();
-        }
-        core.notify_stage(json!({"event": "bgm_state", "bgm": crate::output::bgm_snapshot(&core)}));
-        *lock(&core.run) = None;
+        release_run(&core).await;
     });
     Ok(())
 }

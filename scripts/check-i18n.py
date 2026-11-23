@@ -51,7 +51,7 @@ def template(s):
 def backend():
     found = {}
     for path in sorted(glob("src/**/*.rs", recursive=True)):
-        if path.endswith("douyin/recorded.rs"):
+        if path.endswith(("douyin/recorded.rs", "/tests.rs")):
             continue
         text = io.open(path, encoding="utf-8").read()
         tests = re.search(r"#\[cfg\(test\)\]\s*mod tests", text)
@@ -77,7 +77,7 @@ def page():
             self.skip += tag in ("script", "style")
             for name, value in attrs:
                 if name in ("placeholder", "title", "aria-label", "alt", "content") and value and CJK.search(value):
-                    found.setdefault(value.strip(), "web/index.html")
+                    found.setdefault(value.strip(), path)
 
         def handle_endtag(self, tag):
             self.skip -= tag in ("script", "style")
@@ -85,9 +85,10 @@ def page():
         def handle_data(self, data):
             text = " ".join(data.split())
             if not self.skip and CJK.search(text):
-                found.setdefault(text, "web/index.html")
+                found.setdefault(text, path)
 
-    Page().feed(io.open("web/index.html", encoding="utf-8").read())
+    for path in ("web/index.html", "web/settings.html"):
+        Page().feed(io.open(path, encoding="utf-8").read())
     return found
 
 

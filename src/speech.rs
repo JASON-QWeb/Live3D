@@ -146,7 +146,12 @@ async fn stream_pcm_cued(
         if let Some(pending) = cue.as_ref()
             && (frame_idx as u64) * 20 >= pending.delay_ms
         {
-            send(run, epoch, Command::Signal(9, wire::text_msg(pending.action))).await?;
+            send(
+                run,
+                epoch,
+                Command::Signal(9, wire::text_msg(pending.action)),
+            )
+            .await?;
             app.event(pending.label, pending.action.to_owned());
             cue_sent = true;
             cue = None;
@@ -374,239 +379,8 @@ async fn preview_generated(
     ))
 }
 
-struct AbortOnDrop(Option<tokio::task::JoinHandle<()>>);
-impl Drop for AbortOnDrop {
-    fn drop(&mut self) {
-        if let Some(h) = self.0.take() {
-            h.abort();
-        }
-    }
-}
-
-fn clear_stage_song(app: &App) {
-    let had_song = lock(&app.screen).song.take().is_some();
-    if had_song {
-        app.notify_stage(json!({"event": "song_stop"}));
-    }
-}
-
-fn notify_bgm_state(app: &App) {
-    let bgm = crate::output::bgm_snapshot(app);
-    app.notify_stage(json!({"event": "bgm_state", "bgm": bgm}));
-}
-
-fn song_phrase(
-    app: &App,
-    run: &Run,
-    cfg: &Settings,
-    scene: Scene,
-    fields: &[(&str, &str)],
-) -> Option<(Arc<Snapshot>, String)> {
-    let profile = app
-        .prompts
-        .active(&cfg.prompt_profile, cfg.is_english())
-        .ok()?;
-    let line = lock(&run.variants).scene(&profile, scene, fields)?;
-    Some((profile, line))
-}
-
-async fn play_track(
-    app: &App,
-    run: &Run,
-    o: u64,
-    at: &mut Option<u64>,
-    id: uuid::Uuid,
-) -> Result<()> {
-    let tracks = crate::library::list(app)?;
-    let (raw_title, next_idx) = tracks
-        .iter()
-        .enumerate()
-        .find(|(_, t)| t.id == id)
-        .map(|(i, t)| (t.title.clone(), (i + 1) % tracks.len().max(1)))
-        .unwrap_or_else(|| ("当前曲目".into(), 0));
-    if !tracks.is_empty() {
-        run.next_track_index.store(next_idx, Ordering::Relaxed);
-    }
-    let pcm = crate::library::audio(app, id).await?;
-    let cfg = app.config();
-    let title = crate::config::resolve_song_title(&cfg, &raw_title);
-    let use_stage_audio = cfg.song_audio_mode == "stage";
-
-    {
-        // Lock song_gifts briefly when entering singing state for strict ordering with gift buffering.
-        let _g = lock(&run.song_gifts);
-        run.singing.store(true, Ordering::SeqCst);
-    }
-    {
-        let mut v = lock(&app.view);
-        v.singing = true;
-        v.current_song = title.clone();
-    }
-    // Pause BGM cleanly before the spoken intro and singing start.
-    notify_bgm_state(app);
-
-    let playback_id = uuid::Uuid::new_v4().to_string();
-    let vol = cfg.song_volume as f32 / 100.0;
-    if use_stage_audio {
-        // Prebuffer the Hi-Fi stereo track while she speaks the intro (TRTC audio stays unmuted until song_play).
-        lock(&app.screen).song = Some(crate::state::StageSong {
-            playback_id: playback_id.clone(),
-            track_id: id.to_string(),
-            title: title.clone(),
-            state: "prepare".into(),
-            started_at: 0,
-            volume: vol,
-        });
-        app.notify_stage(json!({
-            "event": "song_prepare",
-            "playback_id": playback_id,
-            "track_id": id.to_string(),
-            "title": title,
-            "volume": vol,
-        }));
-    }
-
-    let mut spoke_intro = false;
-    if cfg.tts_mode != "system"
-        && let Some((_, intro)) = song_phrase(app, run, &cfg, Scene::SongIntro, &[("song", &title)])
-    {
-        match audio::synth(&app.http, &cfg, &intro).await {
-            Ok(intro_pcm) => {
-                app.event("开唱报幕", intro.clone());
-                stream_pcm(app, run, o, at, intro_pcm, intro).await?;
-                spoke_intro = true;
-                // Give Vidu a clean beat to finish rendering the spoken intro before starting to sing.
-                tokio::time::sleep(Duration::from_millis(INTRO_SETTLE_MS)).await;
-            }
-            Err(e) => {
-                ensure!(o == *run.epoch.borrow(), "播出内容已取消");
-                app.event("开唱报幕跳过", format!("语音合成失败，直接开始演唱：{e}"));
-            }
-        }
-    }
-
-    if use_stage_audio && !spoke_intro {
-        // Brief window so Stage finishes prebuffering the local Hi-Fi track.
-        tokio::time::sleep(Duration::from_millis(300)).await;
-    }
-    app.event("唱歌", format!("开始演唱《{title}》"));
-
-    let sync_offset_ms = if use_stage_audio {
-        app.config().song_sync_offset_ms as u64
-    } else {
-        0
-    };
-    let sing_act = cfg.active_singing_action().trim();
-    let sing_cue = (!sing_act.is_empty()).then(|| DelayedCue {
-        delay_ms: singing_cue_delay_ms(&pcm, use_stage_audio, sync_offset_ms),
-        label: "唱歌神态",
-        action: sing_act,
-    });
-    let _sync_guard = if use_stage_audio {
-        let app_clone = app.clone();
-        let pid = playback_id.clone();
-        let tid = id.to_string();
-        let song_title = title.clone();
-        Some(AbortOnDrop(Some(tokio::spawn(async move {
-            if sync_offset_ms > 0 {
-                tokio::time::sleep(Duration::from_millis(sync_offset_ms)).await;
-            }
-            let started_at = now();
-            let current_vol = app_clone.config().song_volume as f32 / 100.0;
-            let active = {
-                let mut sc = lock(&app_clone.screen);
-                if let Some(ref mut s) = sc.song
-                    && s.playback_id == pid
-                {
-                    s.state = "play".into();
-                    s.started_at = started_at;
-                    s.volume = current_vol;
-                    true
-                } else {
-                    false
-                }
-            };
-            if active {
-                app_clone.notify_stage(json!({
-                    "event": "song_play",
-                    "playback_id": pid,
-                    "track_id": tid,
-                    "title": song_title,
-                    "volume": current_vol,
-                }));
-            }
-        }))))
-    } else {
-        None
-    };
-
-    let sent_sing_action =
-        stream_pcm_cued(app, run, o, at, pcm, String::new(), sing_cue).await?;
-
-    // Wait the remaining sync tail so the song finishes cleanly before unmuting TRTC or resetting pose.
-    let tail_ms = if use_stage_audio {
-        sync_offset_ms
-    } else {
-        SING_CUE_MIN_DELAY_MS
-    };
-    if tail_ms > 0 {
-        tokio::time::sleep(Duration::from_millis(tail_ms)).await;
-    }
-    drop(_sync_guard);
-    clear_stage_song(app);
-
-    // Song audio finished: atomically leave gift-buffering state and collect buffered gifts.
-    let buffered_gifts = {
-        let mut g = lock(&run.song_gifts);
-        let drained = std::mem::take(&mut *g);
-        run.singing.store(false, Ordering::SeqCst);
-        drained
-    };
-    run.last_song_end_ms.store(now(), Ordering::Relaxed);
-
-    let post_act = cfg.active_post_sing_action().trim();
-    if !post_act.is_empty() {
-        send(run, o, Command::Signal(9, wire::text_msg(post_act))).await?;
-    } else if sent_sing_action {
-        send(run, o, Command::Signal(15, json!({}))).await?;
-    }
-
-    // Keep an explicit pause between finishing the song and starting post-song thanks.
-    let gap = cfg.utterance_gap as u64;
-    if gap > 0 {
-        tokio::time::sleep(Duration::from_secs(gap)).await;
-    }
-
-    if cfg.tts_mode != "system" {
-        let (scene, label) = if buffered_gifts.is_empty() {
-            (Scene::SongEnd, "唱完谢幕")
-        } else {
-            (Scene::SongGifts, "唱完谢礼")
-        };
-        let gifts = crate::director::format_gift_summary(&cfg, &buffered_gifts);
-        if let Some((profile, line)) = song_phrase(
-            app,
-            run,
-            &cfg,
-            scene,
-            &[("song", &title), ("gifts", &gifts)],
-        ) {
-            let mut thanks_at = Some(now());
-            let mut playback = ReplyPlayback {
-                app,
-                run,
-                cfg: &cfg,
-                epoch: o,
-                at: &mut thanks_at,
-            };
-            playback
-                .response(&profile, Decision::Speak(line.clone()), &[])
-                .await?;
-            app.event(label, line);
-        }
-    }
-    Ok(())
-}
+mod song;
+use song::{clear_stage_song, notify_bgm_state, play_track};
 async fn play(app: &App, run: &Run, o: Offer) -> Result<bool> {
     let mut first = Some(o.at);
     let mut spoken = true;
@@ -639,6 +413,30 @@ async fn play(app: &App, run: &Run, o: Offer) -> Result<bool> {
     }
     Ok(spoken)
 }
+async fn next_offer(
+    run: &Run,
+    gifts: &mut mpsc::Receiver<Offer>,
+    rx: &mut mpsc::Receiver<Offer>,
+    gift_streak: &mut u8,
+) -> Option<Offer> {
+    if *gift_streak >= 3 && !rx.is_empty() {
+        *gift_streak = 0;
+        rx.try_recv().ok()
+    } else {
+        tokio::select! {
+            biased;
+            _ = run.stop.cancelled() => None,
+            offer = gifts.recv() => {
+                *gift_streak = gift_streak.saturating_add(1);
+                offer
+            }
+            offer = rx.recv() => {
+                *gift_streak = 0;
+                offer
+            }
+        }
+    }
+}
 pub async fn worker(
     app: App,
     run: Arc<Run>,
@@ -646,25 +444,7 @@ pub async fn worker(
     mut gifts: mpsc::Receiver<Offer>,
 ) {
     let mut gift_streak = 0u8;
-    loop {
-        let next = if gift_streak >= 3 && !rx.is_empty() {
-            gift_streak = 0;
-            rx.try_recv().ok()
-        } else {
-            tokio::select! {
-                biased;
-                _ = run.stop.cancelled() => return,
-                offer = gifts.recv() => {
-                    gift_streak = gift_streak.saturating_add(1);
-                    offer
-                }
-                offer = rx.recv() => {
-                    gift_streak = 0;
-                    offer
-                }
-            }
-        };
-        let Some(o) = next else { return };
+    while let Some(o) = next_offer(&run, &mut gifts, &mut rx, &mut gift_streak).await {
         {
             let mut v = lock(&app.view);
             v.pending = v.pending.saturating_sub(1);
@@ -738,165 +518,4 @@ pub async fn worker(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::state::Inner;
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicBool, AtomicU64, AtomicUsize},
-    };
-    use tokio::sync::watch;
-    use tokio_util::sync::CancellationToken;
-
-    fn pcm_frames(frames: &[i16]) -> Vec<u8> {
-        let mut out = Vec::with_capacity(frames.len() * audio::FRAME);
-        for &amp in frames {
-            let bytes = amp.to_le_bytes();
-            for _ in 0..(audio::FRAME / 2) {
-                out.extend_from_slice(&bytes);
-            }
-        }
-        out
-    }
-
-    fn test_run() -> (App, Arc<Run>, mpsc::Receiver<Packet>) {
-        let dir = tempfile::tempdir().unwrap();
-        let app = Inner::new(dir.path().to_path_buf()).unwrap();
-        let (wire, wrx) = mpsc::channel(32);
-        let (jobs, _jrx) = mpsc::channel(4);
-        let (gifts, _grx) = mpsc::channel(4);
-        let (epoch, _) = watch::channel(0);
-        let (choreo, _) = watch::channel(false);
-        let run = Arc::new(Run {
-            stop: CancellationToken::new(),
-            epoch,
-            wire,
-            jobs,
-            gifts,
-            choreo,
-            next_action: AtomicU64::new(0),
-            history: Default::default(),
-            variants: Default::default(),
-            singing: AtomicBool::new(false),
-            busy: AtomicBool::new(false),
-            last_activity_ms: AtomicU64::new(0),
-            last_song_end_ms: AtomicU64::new(0),
-            last_ambient_ms: AtomicU64::new(0),
-            last_join_welcome_ms: AtomicU64::new(0),
-            song_gifts: Mutex::new(Vec::new()),
-            next_track_index: AtomicUsize::new(0),
-        });
-        (app, run, wrx)
-    }
-
-    #[test]
-    fn leading_silence_skips_quiet_intro_and_transient_clicks() {
-        assert_eq!(leading_silence_ms(&[]), 0);
-
-        let immediate = pcm_frames(&[1200, 1200, 1200, 1200]);
-        assert_eq!(leading_silence_ms(&immediate), 0);
-
-        // 5 silent frames, 1 transient click, 4 silent frames, then continuous audio at frame 10 (200 ms)
-        let mut amps = vec![0; 5];
-        amps.push(2000);
-        amps.extend(vec![10; 4]);
-        amps.extend(vec![1000; 5]);
-        assert_eq!(leading_silence_ms(&pcm_frames(&amps)), 200);
-
-        // All silent falls back to 0 so the cue still fires at base delay
-        assert_eq!(leading_silence_ms(&pcm_frames(&[0; 20])), 0);
-    }
-
-    #[test]
-    fn singing_cue_delay_waits_for_stage_offset_and_leading_silence() {
-        let mut amps = vec![0; 15]; // 300 ms silence
-        amps.extend(vec![1500; 5]);
-        let pcm = pcm_frames(&amps);
-
-        assert_eq!(singing_cue_delay_ms(&pcm, true, 1200), 1500);
-        assert_eq!(singing_cue_delay_ms(&pcm, true, 400), 1100);
-        assert_eq!(singing_cue_delay_ms(&pcm, false, 1200), 1100);
-    }
-
-    #[tokio::test]
-    async fn stream_pcm_cued_emits_signal_9_only_after_delay_frames() {
-        let (app, run, mut wrx) = test_run();
-        let pcm = Bytes::from(pcm_frames(&[1000; 5])); // 100 ms total
-        let mut at = Some(now());
-
-        let sent = stream_pcm_cued(
-            &app,
-            &run,
-            0,
-            &mut at,
-            pcm,
-            String::new(),
-            Some(DelayedCue {
-                delay_ms: 40,
-                label: "唱歌神态",
-                action: "自然投入地唱歌",
-            }),
-        )
-        .await
-        .unwrap();
-        assert!(sent);
-
-        let mut audio_before_signal = 0usize;
-        let mut audio_after_signal = 0usize;
-        let mut signal_texts = Vec::new();
-        while let Ok(pkt) = wrx.try_recv() {
-            match pkt.cmd {
-                Command::Line(_, _) => {}
-                Command::Audio(_) => {
-                    if signal_texts.is_empty() {
-                        audio_before_signal += 1;
-                    } else {
-                        audio_after_signal += 1;
-                    }
-                }
-                Command::Signal(9, payload) => {
-                    signal_texts.push(
-                        payload["text_msg"]["content"]
-                            .as_str()
-                            .unwrap()
-                            .to_owned(),
-                    );
-                }
-                Command::Signal(other, _) => panic!("unexpected signal type {other}"),
-            }
-        }
-
-        // Frame indices 0 (0ms), 1 (20ms), 2 (40ms -> cue fires after frame 2 audio)
-        assert_eq!(audio_before_signal, 3);
-        assert_eq!(audio_after_signal, 2);
-        assert_eq!(signal_texts, vec!["自然投入地唱歌"]);
-    }
-
-    #[tokio::test]
-    async fn stream_pcm_cued_skips_signal_if_track_ends_before_delay() {
-        let (app, run, mut wrx) = test_run();
-        let pcm = Bytes::from(pcm_frames(&[1000; 2])); // 40 ms total (frames at 0ms, 20ms)
-        let mut at = Some(now());
-
-        let sent = stream_pcm_cued(
-            &app,
-            &run,
-            0,
-            &mut at,
-            pcm,
-            String::new(),
-            Some(DelayedCue {
-                delay_ms: 100,
-                label: "唱歌神态",
-                action: "自然投入地唱歌",
-            }),
-        )
-        .await
-        .unwrap();
-        assert!(!sent);
-
-        while let Ok(pkt) = wrx.try_recv() {
-            assert!(!matches!(pkt.cmd, Command::Signal(9, _)));
-        }
-    }
-}
+mod tests;

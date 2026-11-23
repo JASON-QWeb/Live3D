@@ -1,6 +1,6 @@
 //! Replays what douyinLive's Go code returned on 4,006 inputs against the Rust
 //! port. The cases were recorded with rust-anything from douyinLive commit
-//! af34f7c; `third_party/douyinLive-recording/README.md` says how to record
+//! af34f7c; `scripts/douyin/README.md` says how to record
 //! them again after the original changes.
 
 use super::{page, params, params::Screen, sign};
@@ -32,11 +32,6 @@ fn snapshot(info: &page::RoomInfo) -> String {
 
 /// The recorded function's result, shaped like the Go wrapper's.
 fn call(name: &str, a: &[Value]) -> Result<Value, String> {
-    let screen = |i: usize| Screen {
-        width: n(&a[i]),
-        height: n(&a[i + 1]),
-    };
-    let text = |t: String| Ok(json!(t));
     let run: Run = match name {
         "SignWithValues" => |a| {
             sign::websocket_signature_with(s(&a[0]), b(&a[1])?, a[2] == true, b(&a[3])?, b(&a[4])?)
@@ -91,39 +86,46 @@ fn call(name: &str, a: &[Value]) -> Result<Value, String> {
                 st.known()
             )))
         },
-        "GoldenWSQuery" => {
-            return text(params::websocket_query(
-                s(&a[0]),
-                s(&a[1]),
-                s(&a[2]),
-                s(&a[3]),
-                s(&a[4]),
-                s(&a[5]),
-                screen(6),
-            ));
-        }
-        "GoldenIMFetchQuery" => {
-            return text(params::im_fetch_query(
-                s(&a[0]),
-                s(&a[1]),
-                s(&a[2]),
-                s(&a[3]),
-                screen(4),
-            ));
-        }
+        _ => return query(name, a),
+    };
+    run(a)
+}
+
+fn query(name: &str, a: &[Value]) -> Result<Value, String> {
+    let screen = |i: usize| Screen {
+        width: n(&a[i]),
+        height: n(&a[i + 1]),
+    };
+    let text = |t: String| Ok(json!(t));
+    match name {
+        "GoldenWSQuery" => text(params::websocket_query(
+            s(&a[0]),
+            s(&a[1]),
+            s(&a[2]),
+            s(&a[3]),
+            s(&a[4]),
+            s(&a[5]),
+            screen(6),
+        )),
+        "GoldenIMFetchQuery" => text(params::im_fetch_query(
+            s(&a[0]),
+            s(&a[1]),
+            s(&a[2]),
+            s(&a[3]),
+            screen(4),
+        )),
         "GoldenRoomEnterQuery" => {
             let room = if a[4] == true { s(&a[1]) } else { "" };
-            return text(params::room_enter_query(
+            text(params::room_enter_query(
                 s(&a[0]),
                 room,
                 s(&a[2]),
                 s(&a[3]),
                 screen(5),
-            ));
+            ))
         }
-        other => return Err(format!("no Rust function for {other}")),
-    };
-    run(a)
+        other => Err(format!("no Rust function for {other}")),
+    }
 }
 
 fn replay(cases: &str) -> usize {

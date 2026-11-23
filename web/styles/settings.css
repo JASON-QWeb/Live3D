@@ -1,0 +1,498 @@
+/* ==========================================================================
+   FORMS & SETTINGS
+   ========================================================================== */
+textarea,
+input:not([type="checkbox"]):not([type="file"]),
+select {
+  width: 100%;
+  min-width: 0;
+  background: var(--surface-subtle);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  padding: 9px 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  transition:
+    border-color 140ms var(--ease),
+    background-color 140ms var(--ease),
+    box-shadow 140ms var(--ease);
+}
+
+textarea::placeholder,
+input::placeholder {
+  color: #9a9da6;
+}
+
+textarea:hover,
+input:not([type="checkbox"]):not([type="file"]):hover,
+select:hover {
+  border-color: var(--border-strong);
+}
+
+textarea:focus,
+input:not([type="checkbox"]):not([type="file"]):focus,
+select:focus {
+  background: var(--surface);
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(17, 17, 19, 0.08);
+  outline: none;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2371717A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  cursor: pointer;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+}
+
+.fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* File upload input inside Settings */
+.field-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+
+.field-upload > label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+input[type="file"] {
+  font-size: 12.5px;
+  color: var(--body);
+  max-width: 100%;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+input[type="file"]::file-selector-button {
+  font: 500 12.5px/1.2 var(--sans);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 6px 13px;
+  margin-right: 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-pill);
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease);
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: var(--surface-well);
+  border-color: var(--border-strong);
+}
+
+/* Minimalist Toggle Switch */
+.toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 4px 0 2px;
+}
+
+.fields .check {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.check input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 34px;
+  height: 20px;
+  border-radius: var(--r-pill);
+  background: #dcdce2;
+  border: 1px solid transparent;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 160ms var(--ease);
+}
+
+.check input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(17, 17, 19, 0.22);
+  transition: transform 160ms var(--ease);
+}
+
+.check input[type="checkbox"]:checked {
+  background: var(--ink);
+}
+
+.check input[type="checkbox"]:checked::before {
+  transform: translateX(14px);
+}
+
+/* Collapsible Sub-Sections */
+.sub-disclosure {
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+  margin-top: 2px;
+}
+
+.sub-disclosure summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--body);
+  padding: 2px 0;
+  transition: color 140ms var(--ease);
+}
+
+.sub-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.sub-disclosure summary::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M4.5 3L7.5 6L4.5 9' stroke='%2371717A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  transition: transform 150ms var(--ease);
+}
+
+.sub-disclosure[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.sub-disclosure summary:hover {
+  color: var(--ink);
+}
+
+.sub-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.prompt-source {
+  color: var(--body);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+/* Service Status Banner (#voiceState, #modelState) */
+.service-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r-control);
+  background: var(--surface-subtle);
+  border: 1px solid var(--hairline);
+  font-size: 12px;
+  color: var(--body);
+  line-height: 1.45;
+}
+
+.service-banner:empty {
+  display: none;
+}
+
+.service-banner::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a1a1aa;
+  flex-shrink: 0;
+}
+
+.service-banner.is-ready {
+  background: var(--live-bg);
+  border-color: var(--live-border);
+  color: var(--live-ink);
+}
+
+.service-banner.is-ready::before {
+  background: var(--live);
+}
+
+/* Startup progress under the service banner (#voiceProgress, #modelProgress) */
+.service-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--body);
+}
+
+.service-progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.service-progress-row .mono {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.meter {
+  position: relative;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-well);
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+}
+
+.meter > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--ink-soft);
+  transition: width 0.4s var(--ease);
+}
+
+/* Unknown total: a short segment sweeps across */
+.meter.is-indeterminate > span {
+  width: 30%;
+  animation: meterSweep 1.4s var(--ease) infinite;
+}
+
+@keyframes meterSweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.obs-missing a {
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Keys / Credentials inside Cell 4 */
+.key-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.key-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.key-head label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.key-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-well);
+  border: 1px solid var(--hairline);
+  color: var(--muted);
+}
+
+.key-badge.is-set {
+  background: var(--live-bg);
+  border-color: var(--live-border);
+  color: var(--live-ink);
+}
+
+.key-badge.is-set::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--live);
+}
+
+.keyline {
+  display: flex;
+  gap: 7px;
+}
+
+.keyline input {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.keyline button {
+  padding: 7px 11px;
+  font-size: 12.5px;
+  flex-shrink: 0;
+}
+
+.cred-actions {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* OBS Architectural Micro-Diagram (Inspired by reference bottom cells) */
+.obs-flow {
+  margin-top: auto;
+  padding-top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.obs-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--hairline);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-pill);
+  white-space: nowrap;
+}
+
+.obs-node--center {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
+  border-radius: var(--r-pill);
+  padding: 6px 12px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  box-shadow: var(--shadow-dark-pill);
+}
+
+.obs-node-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--ink);
+  color: #ffffff;
+  font: 600 9.5px/18px var(--mono);
+  text-align: center;
+}
+
+.obs-node-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--live);
+}
+
+.obs-wire {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+  position: relative;
+}
+
+.obs-wire span {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #d4d4d8;
+  transform: translateX(-50%);
+}
+
+/* Settings Footer Bar */
+.settings-foot {
+  margin-top: 18px;
+  padding: 0 4px;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.data-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.data-dir span {
+  overflow-wrap: anywhere;
+}

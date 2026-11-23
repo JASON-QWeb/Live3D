@@ -2,8 +2,8 @@
 //! douyinLive (MIT, jwwsjlm): `websocket_params.go`, `heartbeat.go`,
 //! `room_info.go`, `session_profile.go`, `http_context.go` and `live_id.go`.
 //!
-//! Depends only on std and `md-5` so the recording crate in
-//! `third_party/douyinLive/rust/` compiles it unchanged.
+//! Depends only on std and `md-5` so the recording tools in
+//! `scripts/douyin/` can compile it unchanged.
 
 use super::sign::md5_hex;
 
