@@ -1,3 +1,4 @@
+import { t, tr, lang, setLang } from "./i18n.js";
 import {
   el,
   api,
@@ -11,6 +12,10 @@ import {
   loadConfig,
   configuration,
   voiceStatus,
+  servicesStarting,
+  obsApp,
+  obsStream,
+  settingsDirty,
 } from "./settings.js";
 
 let mode = "say",
@@ -53,9 +58,28 @@ function tab(id) {
   });
   el("config").hidden = !visibleConfig;
   el("desk").hidden = visibleConfig;
-  if (visibleConfig) voiceStatus();
+  if (visibleConfig) {
+    voiceStatus();
+    obsApp();
+    obsStream();
+  }
 }
 document.querySelectorAll(".tab").forEach((n) => (n.onclick = () => tab(n.dataset.tab)));
+
+const langButton = el("uiLang");
+langButton.textContent = lang === "en" ? "中文" : "English";
+langButton.onclick = async () => {
+  if (
+    settingsDirty() &&
+    !(await confirmAction(
+      t("切换界面语言"),
+      t("设置页有未保存的修改，切换语言会刷新页面并丢失这些修改。"),
+      t("切换"),
+    ))
+  )
+    return;
+  if (!setLang(lang === "en" ? "zh" : "en")) notify(t("无法保存语言选择，浏览器禁止了本地存储"));
+};
 
 function timespan(ms) {
   const secs = Math.max(0, Math.floor(ms / 1000));
@@ -72,9 +96,9 @@ function showPoster() {
   const screenBox = el("screenBox");
   if (screenBox) screenBox.dataset.hasFrame = String(!!source);
   const preview = el("previewType");
-  preview.textContent = frameUrl ? "实时监看" : avatarUrl ? "角色参考图" : "未收到画面";
+  preview.textContent = t(frameUrl ? "实时监看" : avatarUrl ? "角色参考图" : "未收到画面");
   preview.classList.toggle("is-live", !!frameUrl);
-  el("emptyTitle").textContent = configuration?.settings.avatar_id ? "已配置云端形象，等待画面" : "等待角色画面";
+  el("emptyTitle").textContent = t(configuration?.settings.avatar_id ? "已配置云端形象，等待画面" : "等待角色画面");
   el("chooseRole").hidden = !!configuration?.settings.avatar_id;
 }
 
@@ -100,7 +124,8 @@ function makeEmptyEvents() {
   box.className = "empty-events";
   const pill = document.createElement("span");
   pill.className = "audit-pill";
-  pill.innerHTML = '<i aria-hidden="true"></i>监听就绪';
+  pill.innerHTML = '<i aria-hidden="true"></i>';
+  pill.append(t("监听就绪"));
   const well = document.createElement("span");
   well.className = "empty-well";
   well.setAttribute("aria-hidden", "true");
@@ -108,7 +133,7 @@ function makeEmptyEvents() {
     '<svg viewBox="0 0 20 20"><path d="M10 3.2l5.6 2.2v4.2c0 3.5-2.3 6.1-5.6 7-3.3-.9-5.6-3.5-5.6-7V5.4L10 3.2Z" /><path d="M7.8 10.1l1.5 1.5 3-3.1" /></svg>';
   const text = document.createElement("span");
   text.className = "empty-events-text";
-  text.textContent = "暂无直播事件";
+  text.textContent = t("暂无直播事件");
   box.append(pill, well, text);
   return box;
 }
@@ -119,7 +144,7 @@ function paintEvents(v) {
   if (list.dataset.stamp === stamp) return;
   list.dataset.stamp = stamp;
   list.replaceChildren();
-  el("eventCount").textContent = v.events.length ? v.events.length + " 条" : "";
+  el("eventCount").textContent = v.events.length ? t("{0} 条", v.events.length) : "";
   if (el("clearEvents")) el("clearEvents").hidden = !v.events.length;
   if (!v.events.length) {
     list.append(makeEmptyEvents());
@@ -130,9 +155,9 @@ function paintEvents(v) {
       time = document.createElement("time"),
       type = document.createElement("small"),
       p = document.createElement("p");
-    time.textContent = new Date(e.at).toLocaleTimeString("zh-CN", { hour12: false });
-    type.textContent = e.kind;
-    p.textContent = e.text;
+    time.textContent = new Date(e.at).toLocaleTimeString(lang === "en" ? "en-GB" : "zh-CN", { hour12: false });
+    type.textContent = tr(e.kind);
+    p.textContent = tr(e.text);
     item.className = "event";
     item.append(time, type, p);
     list.append(item);
@@ -142,7 +167,10 @@ function paintEvents(v) {
 function paint(v) {
   state = v;
   const live = v.phase === "live";
-  el("phase").textContent = names[v.phase] || v.phase;
+  const douyin = el("douyinState");
+  douyin.textContent = v.douyin ? t("抖音弹幕 · {0}", tr(v.douyin)) : "";
+  douyin.classList.toggle("is-ready", /弹幕已接入/.test(v.douyin));
+  el("phase").textContent = names[v.phase] ? t(names[v.phase]) : v.phase;
   el("lamp").className = live ? "live" : busy() || v.phase === "unconfirmed" ? "warn" : "";
   el("start").hidden = busy();
   el("start").disabled = v.phase === "unconfirmed";
@@ -152,32 +180,35 @@ function paint(v) {
   el("interrupt").disabled = !live;
   for (const id of ["media", "reference", "reset", "removeRef"]) el(id).disabled = !live;
   el("choreo").disabled = !live || !configuration?.settings.actions.length;
-  el("choreo").textContent = v.choreo ? "暂停动作编排" : "开始动作编排";
+  el("choreo").textContent = t(v.choreo ? "暂停动作编排" : "开始动作编排");
   el("playTrack").disabled = !live || !el("tracks").value;
-  el("toggleBgm").textContent = v.bgm_playing || v.current_bgm ? "暂停 BGM" : "开启 BGM";
+  el("toggleBgm").textContent = t(v.bgm_playing || v.current_bgm ? "暂停 BGM" : "开启 BGM");
   el("bgmNow").textContent = !v.current_bgm
-    ? "未播放"
+    ? t("未播放")
     : !v.output
-      ? "舞台未打开（请点「打开舞台」）"
+      ? t("舞台未打开（请点「打开舞台」）")
       : v.singing
-        ? "唱歌已自动暂停 · " + v.current_bgm
+        ? t("唱歌已自动暂停 · {0}", v.current_bgm)
         : v.bgm_status === "blocked"
-          ? "请点舞台「允许播放声音」"
+          ? t("请点舞台「允许播放声音」")
           : v.bgm_status === "loading"
-            ? "舞台加载中… " + v.current_bgm
+            ? t("舞台加载中… {0}", v.current_bgm)
             : v.bgm_status?.startsWith("error:")
-              ? "播放失败 · " + v.bgm_status.slice(6)
+              ? t("播放失败 · {0}", v.bgm_status.slice(6))
               : v.bgm_status === "playing"
-                ? "舞台出声中 · " + v.current_bgm
-                : "等待舞台播放 · " + v.current_bgm;
+                ? t("舞台出声中 · {0}", v.current_bgm)
+                : t("等待舞台播放 · {0}", v.current_bgm);
   el("soundcheck").disabled = !!busy() || !v.output;
-  el("message").textContent = v.message;
-  el("outputState").textContent = v.output || "舞台未打开";
+  el("message").textContent = tr(v.message);
+  el("outputState").textContent = v.output ? tr(v.output) : t("舞台未打开");
   const stageDot = el("stageDot");
   if (stageDot) stageDot.classList.toggle("is-ready", !!v.output);
   el("clock").textContent = v.started ? timespan((v.ended || Date.now()) - v.started) : "00:00:00";
-  el("pending").textContent =
-    v.pending + (v.singing ? " · 演唱《" + (v.current_song || "曲目") + "》" : v.voice_busy ? " · 播出中" : "");
+  el("pending").textContent = v.singing
+    ? t("{0} · 演唱《{1}》", v.pending, v.current_song || t("曲目"))
+    : v.voice_busy
+      ? t("{0} · 播出中", v.pending)
+      : String(v.pending);
   const strip = el("signalStrip");
   if (strip) {
     strip.dataset.live = String(live);
@@ -186,29 +217,23 @@ function paint(v) {
     if (caption) {
       caption.textContent = live
         ? v.singing
-          ? "直播中 · 正在演唱《" + (v.current_song || "曲目") + "》"
-          : v.voice_busy
-            ? "直播中 · 语音播出"
-            : "直播中 · 推流正常"
-        : busy()
-          ? "连线中 · 建立信令"
-          : v.output
-            ? "待机 · 舞台已连接"
-            : "待机 · 本机就绪";
+          ? t("直播中 · 正在演唱《{0}》", v.current_song || t("曲目"))
+          : t(v.voice_busy ? "直播中 · 语音播出" : "直播中 · 推流正常")
+        : t(busy() ? "连线中 · 建立信令" : v.output ? "待机 · 舞台已连接" : "待机 · 本机就绪");
     }
   }
   const m = v.metrics;
   const latency = el("latency");
   latency.textContent =
-    m.last_first_audio_ms === null ? "—" : (m.last_first_audio_ms / 1000).toFixed(2) + " 秒";
+    m.last_first_audio_ms === null ? "—" : t("{0} 秒", (m.last_first_audio_ms / 1000).toFixed(2));
   const reply = m.last_reply;
   latency.title = reply ? [
-    reply.queue_ms != null && "排队 " + reply.queue_ms + " ms",
-    reply.first_token_ms != null && "模型首字 " + reply.first_token_ms + " ms",
-    reply.first_sentence_ms != null && "首句 " + reply.first_sentence_ms + " ms",
-    reply.tts_ms != null && "语音合成 " + reply.tts_ms + " ms",
-    reply.prompt_tokens != null && "输入 " + reply.prompt_tokens + " token",
-    reply.cached_tokens != null && "缓存命中 " + reply.cached_tokens + " token",
+    reply.queue_ms != null && t("排队 {0} ms", reply.queue_ms),
+    reply.first_token_ms != null && t("模型首字 {0} ms", reply.first_token_ms),
+    reply.first_sentence_ms != null && t("首句 {0} ms", reply.first_sentence_ms),
+    reply.tts_ms != null && t("语音合成 {0} ms", reply.tts_ms),
+    reply.prompt_tokens != null && t("输入 {0} token", reply.prompt_tokens),
+    reply.cached_tokens != null && t("缓存命中 {0} token", reply.cached_tokens),
   ].filter(Boolean).join(" · ") : "";
   el("dimensions").textContent = m.output_width
     ? m.output_width +
@@ -218,11 +243,11 @@ function paint(v) {
     : "—";
   el("bill").textContent =
     m.credits != null
-      ? m.credits + " 积分"
+      ? t("{0} 积分", m.credits)
       : m.billed_seconds != null
-        ? m.billed_seconds + " 秒"
+        ? t("{0} 秒", m.billed_seconds)
         : v.phase === "ended"
-          ? "平台未回传金额"
+          ? t("平台未回传金额")
           : "—";
   el("recovery").hidden = v.phase !== "unconfirmed";
   el("recordRow").hidden = !(v.phase === "ended" && configuration?.settings.recording);
@@ -247,9 +272,10 @@ async function tick() {
       frameUrl = r.status === 204 ? "" : URL.createObjectURL(await r.blob());
       showPoster();
     }
-    if (visibleConfig && timer % 6 === 0) await voiceStatus();
+    if (visibleConfig && (servicesStarting || timer % 6 === 0)) await voiceStatus();
+    if (visibleConfig && timer % 4 === 0) void obsStream();
   } catch (e) {
-    el("phase").textContent = "本机连接中断";
+    el("phase").textContent = t("本机连接中断");
     el("lamp").className = "warn";
     el("message").textContent = e.message;
     el("send").disabled = true;
@@ -286,15 +312,15 @@ action("chooseRole", () => tab("config"));
 action("start", async () => {
   if (!configuration.keys.vidu || (!configuration.avatar && !configuration.settings.avatar_id)) {
     tab("config");
-    notify("开播需填写 Vidu 密钥，并上传角色图或填写形象 ID");
+    notify(t("开播需填写 Vidu 密钥，并上传角色图或填写形象 ID"));
     return;
   }
   const min = configuration.settings.max_minutes;
   if (
     !(await confirmAction(
-      "开始云端连线",
-      "当前时限 " + min + " 分钟。按组件版公开价折合约 ¥" + (min * 1.875).toFixed(2) + "，实际结算以 Vidu 为准。",
-      "开始连线",
+      t("开始云端连线"),
+      t("当前时限 {0} 分钟。按组件版公开价折合约 ¥{1}，实际结算以 Vidu 为准。", min, (min * 1.875).toFixed(2)),
+      t("开始连线"),
     ))
   )
     return;
@@ -315,9 +341,9 @@ action("recover", async () => {
 action("ack", async () => {
   if (
     await confirmAction(
-      "确认云端已结束",
-      "仅在 Vidu 控制台确认此场次已经结束后使用。Avatar3D 会保留人工核对记录。",
-      "确认已结束",
+      t("确认云端已结束"),
+      t("仅在 Vidu 控制台确认此场次已经结束后使用。Avatar3D 会保留人工核对记录。"),
+      t("确认已结束"),
     )
   ) {
     await api("/api/recover", { operator_confirmed: true });
@@ -334,18 +360,18 @@ action("copyStage", async () => {
   await copyText(stageUrl());
   const btn = el("copyStage");
   btn.classList.add("is-copied");
-  setButtonLabel(btn, "已复制地址");
+  setButtonLabel(btn, t("已复制地址"));
   clearTimeout(copyTimer);
   copyTimer = setTimeout(() => {
     btn.classList.remove("is-copied");
-    setButtonLabel(btn, "复制 OBS 地址");
+    setButtonLabel(btn, t("复制 OBS 地址"));
   }, 1800);
-  notify("已复制 OBS 浏览器源地址");
+  notify(t("已复制 OBS 浏览器源地址"));
 });
 
 action("openStage", async () => {
   const w = window.open("about:blank", "avatar3d_stage");
-  if (!w) throw Error("请允许浏览器打开舞台窗口");
+  if (!w) throw Error(t("请允许浏览器打开舞台窗口"));
   w.opener = null;
   w.location.replace(await stageUrl());
 });
@@ -357,20 +383,18 @@ el("modes").onclick = (e) => {
   el("modes")
     .querySelectorAll("button")
     .forEach((n) => n.setAttribute("aria-pressed", String(b === n)));
-  el("line").placeholder = { say: "输入要说的话", reply: "输入给角色的问题", action: "输入角色要执行的动作" }[
-    mode
-  ];
-  el("send").textContent = mode === "action" ? "发送动作" : "加入播出";
+  el("line").placeholder = t({ say: "输入要说的话", reply: "输入给角色的问题", action: "输入角色要执行的动作" }[mode]);
+  el("send").textContent = t(mode === "action" ? "发送动作" : "加入播出");
   el("soundcheck").hidden = mode !== "say";
   el("audition").hidden = mode === "action";
-  setButtonLabel(el("audition"), mode === "reply" ? "试听回复" : "本机试听");
+  setButtonLabel(el("audition"), t(mode === "reply" ? "试听回复" : "本机试听"));
 };
 
 el("line").addEventListener("input", updateCharCount);
 
 action("send", async () => {
   const text = el("line").value.trim();
-  if (!text) throw Error("请输入播出内容");
+  if (!text) throw Error(t("请输入播出内容"));
   await api("/api/command", { kind: mode, text });
   el("line").value = "";
   updateCharCount();
@@ -391,17 +415,17 @@ action("interrupt", async () => {
 
 action("soundcheck", async () => {
   const text = el("line").value.trim();
-  if (!text) throw Error("请输入试音文字");
+  if (!text) throw Error(t("请输入试音文字"));
   await api("/api/soundcheck", { text });
-  notify("已向独立舞台发送试音");
+  notify(t("已向独立舞台发送试音"));
   await tick();
 });
 
 let audioUrl = "";
 action("audition", async () => {
   const text = el("line").value.trim();
-  if (!text) throw Error("请输入要试听的文字");
-  setButtonLabel(el("audition"), "合成中…");
+  if (!text) throw Error(t("请输入要试听的文字"));
+  setButtonLabel(el("audition"), t("合成中…"));
   try {
     const r = await request(mode === "reply" ? "/api/preview/reply" : "/api/preview", {
       method: "POST",
@@ -415,7 +439,7 @@ action("audition", async () => {
     player.hidden = false;
     await player.play();
   } finally {
-    setButtonLabel(el("audition"), mode === "reply" ? "试听回复" : "本机试听");
+    setButtonLabel(el("audition"), t(mode === "reply" ? "试听回复" : "本机试听"));
   }
 });
 
@@ -424,7 +448,7 @@ async function fileEvent(input, path) {
   if (!file) return;
   try {
     await request(path, { method: "POST", body: file });
-    notify("已提交");
+    notify(t("已提交"));
     await tick();
   } catch (e) {
     notify(e.message);
@@ -459,7 +483,7 @@ async function importAudioBatch(rawFiles, input, { endpoint, statusId, detailsId
     .filter((f) => isImportableAudio(f, allowMp4))
     .sort((a, b) => a.name.localeCompare(b.name, "zh-CN", { numeric: true }));
   if (!files.length) {
-    notify("所选内容中未找到可导入的音频文件");
+    notify(t("所选内容中未找到可导入的音频文件"));
     input.value = "";
     return;
   }
@@ -476,7 +500,7 @@ async function importAudioBatch(rawFiles, input, { endpoint, statusId, detailsId
   errors.replaceChildren();
   try {
     for (const [index, file] of files.entries()) {
-      status.textContent = `正在导入第 ${index + 1} / ${files.length} 首…`;
+      status.textContent = t("正在导入第 {0} / {1} 首…", index + 1, files.length);
       const title = file.name.replace(/\.[^.]+$/, "");
       const ext = fileExt(file.name);
       const headers = ext ? { "X-File-Ext": ext } : undefined;
@@ -488,7 +512,7 @@ async function importAudioBatch(rawFiles, input, { endpoint, statusId, detailsId
         });
         imported += 1;
       } catch (error) {
-        if (/已存在/.test(error.message)) {
+        if (/已存在/.test(error.raw ?? error.message)) {
           skipped += 1;
         } else {
           failed += 1;
@@ -498,9 +522,9 @@ async function importAudioBatch(rawFiles, input, { endpoint, statusId, detailsId
         }
       }
     }
-    const parts = [`新增 ${imported} 首`];
-    if (skipped) parts.push(`跳过已存在 ${skipped} 首`);
-    if (failed) parts.push(`失败 ${failed} 首`);
+    const parts = [t("新增 {0} 首", imported)];
+    if (skipped) parts.push(t("跳过已存在 {0} 首", skipped));
+    if (failed) parts.push(t("失败 {0} 首", failed));
     status.textContent = parts.join(" · ");
     details.hidden = failed === 0;
     if (imported) await onDone();
@@ -517,13 +541,13 @@ async function loadTracks() {
     select = el("tracks"),
     old = select.value;
   select.replaceChildren();
-  if (!items.length) select.add(new Option("曲库为空", ""));
-  for (const t of items) {
-    const tag = t.source_ext ? " · 原音质" : "";
-    select.add(new Option(t.title + " · " + timespan(t.duration_ms) + tag, t.id));
+  if (!items.length) select.add(new Option(t("曲库为空"), ""));
+  for (const track of items) {
+    const tag = track.source_ext ? t(" · 原音质") : "";
+    select.add(new Option(track.title + " · " + timespan(track.duration_ms) + tag, track.id));
   }
-  if (items.some((t) => t.id === old)) select.value = old;
-  el("trackCount").textContent = items.length ? `共 ${items.length} 首` : "";
+  if (items.some((track) => track.id === old)) select.value = old;
+  el("trackCount").textContent = items.length ? t("共 {0} 首", items.length) : "";
   el("removeTrack").disabled = !items.length;
   el("clearTracks").disabled = !items.length;
   el("previewTrack").disabled = !items.length;
@@ -535,12 +559,12 @@ async function loadBgm() {
     select = el("bgmTracks"),
     old = select.value;
   select.replaceChildren();
-  if (!items.length) select.add(new Option("暂无背景音乐", ""));
+  if (!items.length) select.add(new Option(t("暂无背景音乐"), ""));
   for (const t of items) {
     select.add(new Option(t.title + " · " + timespan(t.duration_ms), t.id));
   }
   if (items.some((t) => t.id === old)) select.value = old;
-  el("bgmCount").textContent = items.length ? `共 ${items.length} 首` : "";
+  el("bgmCount").textContent = items.length ? t("共 {0} 首", items.length) : "";
   el("toggleBgm").disabled = !items.length;
   el("nextBgm").disabled = items.length < 2;
   el("previewBgm").disabled = !items.length;
@@ -586,7 +610,7 @@ el("addBgmFolder").onchange = (e) =>
 
 action("playTrack", async () => {
   await api("/api/tracks/" + el("tracks").value, {});
-  notify("曲目已加入演唱队列");
+  notify(t("曲目已加入演唱队列"));
 });
 
 async function previewAudioWithFallback(primaryUrl, wavUrl) {
@@ -620,17 +644,17 @@ action("previewTrack", async () => {
 });
 
 action("removeTrack", async () => {
-  if (await confirmAction("从演唱曲库移除", "移除所选曲目在 Avatar3D 中的副本。", "移除")) {
+  if (await confirmAction(t("从演唱曲库移除"), t("移除所选曲目在 Avatar3D 中的副本。"), t("移除"))) {
     await request("/api/tracks/" + el("tracks").value, { method: "DELETE" });
     await loadTracks();
   }
 });
 
 action("clearTracks", async () => {
-  if (await confirmAction("清空演唱曲库", "移除演唱曲库中的全部歌曲副本（不影响原始文件）。", "清空全部")) {
+  if (await confirmAction(t("清空演唱曲库"), t("移除演唱曲库中的全部歌曲副本（不影响原始文件）。"), t("清空全部"))) {
     await request("/api/tracks", { method: "DELETE" });
     await loadTracks();
-    notify("已清空演唱曲库");
+    notify(t("已清空演唱曲库"));
   }
 });
 
@@ -638,13 +662,13 @@ action("toggleBgm", async () => {
   const res = await api("/api/bgm/control", { action: "toggle" });
   await tick();
   if (!res.bgm?.enabled) {
-    notify("背景音乐已暂停");
+    notify(t("背景音乐已暂停"));
   } else if (!state?.output) {
-    notify("背景音乐已开启，请先点「打开舞台」或在 OBS 加载舞台以收听声音");
+    notify(t("背景音乐已开启，请先点「打开舞台」或在 OBS 加载舞台以收听声音"));
   } else if (state?.output?.includes("允许播放")) {
-    notify("背景音乐已开启，请切到舞台页点击「恢复声音」允许播放");
+    notify(t("背景音乐已开启，请切到舞台页点击「恢复声音」允许播放"));
   } else {
-    notify("背景音乐已开启（由舞台 / OBS 输出；若用 OBS 需在高级音频属性开启监听）");
+    notify(t("背景音乐已开启（由舞台 / OBS 输出）"));
   }
 });
 
@@ -675,7 +699,7 @@ el("bgmTracks").onchange = async () => {
 };
 
 action("removeBgm", async () => {
-  if (await confirmAction("移除背景音乐", "移除所选背景音乐在 Avatar3D 中的副本。", "移除")) {
+  if (await confirmAction(t("移除背景音乐"), t("移除所选背景音乐在 Avatar3D 中的副本。"), t("移除"))) {
     await request("/api/bgm/" + el("bgmTracks").value, { method: "DELETE" });
     await loadBgm();
     await tick();
@@ -683,11 +707,11 @@ action("removeBgm", async () => {
 });
 
 action("clearBgm", async () => {
-  if (await confirmAction("清空背景音乐", "移除全部背景音乐副本（不影响原始文件）。", "清空全部")) {
+  if (await confirmAction(t("清空背景音乐"), t("移除全部背景音乐副本（不影响原始文件）。"), t("清空全部"))) {
     await request("/api/bgm", { method: "DELETE" });
     await loadBgm();
     await tick();
-    notify("已清空背景音乐");
+    notify(t("已清空背景音乐"));
   }
 });
 
@@ -741,8 +765,8 @@ async function sendSimulated(kind) {
   await tick();
   notify(
     state?.phase === "live"
-      ? "已触发模拟事件"
-      : "已写入动态日志（未开播不会排入播报；可点「清空动态」清理）",
+      ? t("已触发模拟事件")
+      : t("已写入动态日志（未开播不会排入播报；可点「清空动态」清理）"),
   );
 }
 action("simJoin", () => sendSimulated("join"));
@@ -751,7 +775,7 @@ action("simChat", () => sendSimulated("chat"));
 action("clearEvents", async () => {
   await api("/api/events/clear", {});
   await tick();
-  notify("已清空直播动态");
+  notify(t("已清空直播动态"));
 });
 if (el("keepEventsOnStart")) {
   el("keepEventsOnStart").checked = localStorage.getItem("avatar3d.keepEvents") === "1";
@@ -770,7 +794,7 @@ action("record", async () => {
   collect(v);
   el("recordLinks").replaceChildren();
   if (!urls.length) {
-    notify("云端录播尚未返回下载地址");
+    notify(t("云端录播尚未返回下载地址"));
     return;
   }
   urls.forEach((u, i) => {
@@ -778,7 +802,7 @@ action("record", async () => {
     a.href = u;
     a.target = "_blank";
     a.rel = "noreferrer";
-    a.textContent = "下载录播 " + (i + 1);
+    a.textContent = t("下载录播 {0}", i + 1);
     el("recordLinks").append(a);
   });
 });
@@ -786,8 +810,8 @@ action("record", async () => {
 updateCharCount();
 
 if (!token) {
-  notify("请从 Avatar3D 应用打开控制台");
-  el("phase").textContent = "需要本机授权";
+  notify(t("请从 Avatar3D 应用打开控制台"));
+  el("phase").textContent = t("需要本机授权");
   el("lamp").className = "warn";
   el("start").disabled = true;
 } else {

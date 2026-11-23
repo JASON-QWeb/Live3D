@@ -1,0 +1,235 @@
+{"args":["{name} has {count} items",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a:b:c",2,false,42,1],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a😀b😀c",7,true,0,1],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["日本語のテキスト",100,true,7,42],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a",7,true,2,2],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["{name} has {count} items",100,true,2,0],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["{name} has {count} items",42,false,0,2],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a",1,false,2,255],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["",255,true,2,1],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["HELLO",2,true,1,255],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["  padded  ",2,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["  padded  ",42,true,1,42],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":[".leading",255,false,1,1],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["ns:key.path",7,false,100,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["trailing.a..b",42,true,255,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["abc",42,false,42,2],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["HELLO",42,false,0,1],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["tab\tseparated",2,true,0,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["key_name-1",0,true,1,255],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["  padded  ",42,true,1,1],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["ünïcödé",42,false,255,42],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["日本語のテキストHELLO",0,false,42,255],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["./x/**/*.json",7,false,1,1],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":[":",0,false,255,255],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["tab\tseparated",2,false,42,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["HELLO",42,false,255,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["abchello",2,true,255,42],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["日本語のテキストline1\nline2",255,false,42,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["",255,false,100,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":[".leadingé",42,false,255,42],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["İstanbul",0,true,100,255],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["﻿bom",1,true,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["é",2,true,1,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["",0,false,0,0],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":[":",0,false,42,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["trailing.",0,true,7,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["😀",255,true,2,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["é",42,false,255,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["ns:key.path",2,false,2,42],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["héllo wörld",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["👍🏽 thumbs",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["日本語",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["é",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["İstanbul",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["straße",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["ılık ırmak",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["👨‍👩‍👧 family",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a b",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["ΣΊΣΥΦΟΣ",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a😀b",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["﻿bom",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a²b x½ y①",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["aⅠb Ⅻ",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["a𐐀b 𝐀bc",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["कि ٣٤",7,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["{name} has {count} items",0,false,7,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["{name} has {count} items",7,false,0,7],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["{name} has {count} items",7,false,7,0],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["c142ce10d1dcb22176112b588c676c00",0,false,82,242],"fn":"SignWithValues","ok":"fMBJlLKyZ4d8bp5j"}
+{"args":["c142ce10d1dcb22176112b588c676c00",0,true,38,101],"fn":"SignWithValues","ok":"641kbLdvOUYxY1UZ"}
+{"args":["c142ce10d1dcb22176112b588c676c00",1,false,166,12],"fn":"SignWithValues","ok":"fDJMtCOOuuLj/QHR"}
+{"args":["c142ce10d1dcb22176112b588c676c00",1,true,18,210],"fn":"SignWithValues","ok":"60BA90L3ng+pJ2/q"}
+{"args":["c142ce10d1dcb22176112b588c676c00",63,false,137,24],"fn":"SignWithValues","ok":"fk7eMWh+wzIFC0UT"}
+{"args":["c142ce10d1dcb22176112b588c676c00",63,true,93,149],"fn":"SignWithValues","ok":"6sXV5++bwWgtMG2e"}
+{"args":["c142ce10d1dcb22176112b588c676c00",64,false,14,232],"fn":"SignWithValues","ok":"f/NAL6gbXkAZF41N"}
+{"args":["c142ce10d1dcb22176112b588c676c00",64,true,129,54],"fn":"SignWithValues","ok":"6p2XI+2jrtvn2f/A"}
+{"args":["c142ce10d1dcb22176112b588c676c00",127,false,9,22],"fn":"SignWithValues","ok":"fk5YBgvWkOhqZvk2"}
+{"args":["c142ce10d1dcb22176112b588c676c00",127,true,111,107],"fn":"SignWithValues","ok":"64zfVOhlEFDgKMvM"}
+{"args":["c142ce10d1dcb22176112b588c676c00",200,false,17,61],"fn":"SignWithValues","ok":"fpy5Zoqr4SGFWHJi"}
+{"args":["c142ce10d1dcb22176112b588c676c00",200,true,23,141],"fn":"SignWithValues","ok":"6KH7f+KMSog+yH18"}
+{"args":["c142ce10d1dcb22176112b588c676c00",255,false,108,15],"fn":"SignWithValues","ok":"fDexRW03dgfn4dw/"}
+{"args":["c142ce10d1dcb22176112b588c676c00",255,true,211,144],"fn":"SignWithValues","ok":"6sdQTuVD4MGLLKGs"}
+{"args":["c142ce10d1dcb22176112b588c676c00",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIUN8ssJ"}
+{"args":["c142ce10d1dcb22176112b588c676c00",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGENebZwg"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",0,false,31,242],"fn":"SignWithValues","ok":"fMBJlLKyZ4DdR1m4"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",0,true,57,161],"fn":"SignWithValues","ok":"6QgVhStLhZEPe5Eq"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",1,false,160,149],"fn":"SignWithValues","ok":"fsX45++bwW4rnoFZ"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",1,true,242,15],"fn":"SignWithValues","ok":"6DeBRW03dgwSa+TX"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",63,false,147,149],"fn":"SignWithValues","ok":"fsXV5++bwW4rnbNQ"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",63,true,101,12],"fn":"SignWithValues","ok":"6DJJtCOOuuoCrIGA"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",64,false,249,56],"fn":"SignWithValues","ok":"fpNZQ1wpIg8wIk49"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",64,true,11,142],"fn":"SignWithValues","ok":"6KVeZRQfORlkqS6A"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",127,false,219,34],"fn":"SignWithValues","ok":"fdQR+rLD77QsjttM"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",127,true,74,107],"fn":"SignWithValues","ok":"64zfVOhlEFdQxUgv"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",200,false,36,138],"fn":"SignWithValues","ok":"fKP84XcKQgMr9hJX"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",200,true,30,146],"fn":"SignWithValues","ok":"6ss33kG+rG0GNLNQ"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",255,false,78,143],"fn":"SignWithValues","ok":"fKCIwthC/pm/xh8r"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",255,true,208,174],"fn":"SignWithValues","ok":"6QVNQzvd+iv2Hb4v"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIlzJ2KQ"}
+{"args":["2172eeca1d501b3abb1105acc75fed78",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGEiJR13e"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",0,false,46,26],"fn":"SignWithValues","ok":"fkPiaSXWykbdhMWJ"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",0,true,148,146],"fn":"SignWithValues","ok":"6ss+3kG+rGMHtuQC"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",1,false,163,48],"fn":"SignWithValues","ok":"fpdslcA/iLv9ksAT"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",1,true,95,24],"fn":"SignWithValues","ok":"6k7kMWh+wzIFUfg8"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",63,false,140,182],"fn":"SignWithValues","ok":"fB2wWMgrGlmEyJgB"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",63,true,16,144],"fn":"SignWithValues","ok":"6sdQTuVD4MGLZ6yZ"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",64,false,15,158],"fn":"SignWithValues","ok":"fscDussfi4STkIwA"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",64,true,52,127],"fn":"SignWithValues","ok":"6ZCdNb7LVQUaCoSH"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",127,false,174,136],"fn":"SignWithValues","ok":"fKipRvuk2ykPTwuL"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",127,true,109,198],"fn":"SignWithValues","ok":"68+aWEhaNy0MnkQE"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",200,false,80,119],"fn":"SignWithValues","ok":"fZWwnZlUJoq2JH0Z"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",200,true,149,236],"fn":"SignWithValues","ok":"6/J6X5iHYBVlxO/X"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",255,false,116,92],"fn":"SignWithValues","ok":"fhnlVBAr5LyL2r/Z"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",255,true,76,63],"fn":"SignWithValues","ok":"6ptrVC0aRZDkwXpZ"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIUNF2BS"}
+{"args":["47b111ddb1ba1fc66c16626b276f7bea",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGENe41fs"}
+{"args":["cae92d7e78ede0696de258d707f07d76",0,false,203,46],"fn":"SignWithValues","ok":"fdGtpPnBjJYedGyS"}
+{"args":["cae92d7e78ede0696de258d707f07d76",0,true,178,199],"fn":"SignWithValues","ok":"68WGiIr+hAKlQq04"}
+{"args":["cae92d7e78ede0696de258d707f07d76",1,false,62,20],"fn":"SignWithValues","ok":"fkfEVeiVEhPD5nIi"}
+{"args":["cae92d7e78ede0696de258d707f07d76",1,true,147,76],"fn":"SignWithValues","ok":"6gr7sRN7kxl6pdgp"}
+{"args":["cae92d7e78ede0696de258d707f07d76",63,false,134,126],"fn":"SignWithValues","ok":"fZai/y9Hj4+qKyLp"}
+{"args":["cae92d7e78ede0696de258d707f07d76",63,true,224,87],"fn":"SignWithValues","ok":"6hAW4XEMGU2gd6Lb"}
+{"args":["cae92d7e78ede0696de258d707f07d76",64,false,186,114],"fn":"SignWithValues","ok":"fZBNBwTuyf+2nVag"}
+{"args":["cae92d7e78ede0696de258d707f07d76",64,true,73,155],"fn":"SignWithValues","ok":"6smueC4gXDcDNk94"}
+{"args":["cae92d7e78ede0696de258d707f07d76",127,false,250,18],"fn":"SignWithValues","ok":"fksdBNal/MP2PRA9"}
+{"args":["cae92d7e78ede0696de258d707f07d76",127,true,30,131],"fn":"SignWithValues","ok":"6KMlop9W6F+tMH96"}
+{"args":["cae92d7e78ede0696de258d707f07d76",200,false,107,42],"fn":"SignWithValues","ok":"fdPlgqeJNnV6BJwD"}
+{"args":["cae92d7e78ede0696de258d707f07d76",200,true,193,87],"fn":"SignWithValues","ok":"6hAP4XEMGU2gdIEr"}
+{"args":["cae92d7e78ede0696de258d707f07d76",255,false,38,238],"fn":"SignWithValues","ok":"f/c3WKNejPex+Q0F"}
+{"args":["cae92d7e78ede0696de258d707f07d76",255,true,125,107],"fn":"SignWithValues","ok":"64zfVOhlEFdZMC+k"}
+{"args":["cae92d7e78ede0696de258d707f07d76",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIlEBGBz"}
+{"args":["cae92d7e78ede0696de258d707f07d76",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGEiS7HfR"}
+{"args":["3f3cc644edd57cee75802417d674006f",0,false,10,246],"fn":"SignWithValues","ok":"fM5ce8YShx+74dJv"}
+{"args":["3f3cc644edd57cee75802417d674006f",0,true,171,19],"fn":"SignWithValues","ok":"6k0RLs93HCjMSEH0"}
+{"args":["3f3cc644edd57cee75802417d674006f",1,false,195,142],"fn":"SignWithValues","ok":"fKVCZRQfORlwkExU"}
+{"args":["3f3cc644edd57cee75802417d674006f",1,true,146,202],"fn":"SignWithValues","ok":"68PVG/lGRP2p0YQN"}
+{"args":["3f3cc644edd57cee75802417d674006f",63,false,224,209],"fn":"SignWithValues","ok":"f04hWvWtqc/lw9br"}
+{"args":["3f3cc644edd57cee75802417d674006f",63,true,80,87],"fn":"SignWithValues","ok":"6hAW4XEMGU25AFqV"}
+{"args":["3f3cc644edd57cee75802417d674006f",64,false,177,89],"fn":"SignWithValues","ok":"fhqYtup4svPoYdEV"}
+{"args":["3f3cc644edd57cee75802417d674006f",64,true,152,127],"fn":"SignWithValues","ok":"6ZCdNb7LVQlo4SMq"}
+{"args":["3f3cc644edd57cee75802417d674006f",127,false,148,204],"fn":"SignWithValues","ok":"f8jCvvX6afXvpOu+"}
+{"args":["3f3cc644edd57cee75802417d674006f",127,true,116,17],"fn":"SignWithValues","ok":"6k4r7jV2/WoGEXI2"}
+{"args":["3f3cc644edd57cee75802417d674006f",200,false,215,23],"fn":"SignWithValues","ok":"fkW8Y1gWs/2OnBDz"}
+{"args":["3f3cc644edd57cee75802417d674006f",200,true,241,69],"fn":"SignWithValues","ok":"6gIVOIJQLIlj9eSI"}
+{"args":["3f3cc644edd57cee75802417d674006f",255,false,121,178],"fn":"SignWithValues","ok":"fBBBlyFCBPlzUpzO"}
+{"args":["3f3cc644edd57cee75802417d674006f",255,true,170,16],"fn":"SignWithValues","ok":"6kDLTN8CZ9TQ82lw"}
+{"args":["3f3cc644edd57cee75802417d674006f",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIlC1sQD"}
+{"args":["3f3cc644edd57cee75802417d674006f",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGEi7CZvx"}
+{"args":["00000000000000000000000000000000",0,false,15,187],"fn":"SignWithValues","ok":"fBujqtFw7tHSFZvV"}
+{"args":["00000000000000000000000000000000",0,true,179,79],"fn":"SignWithValues","ok":"6gSgHADGkhP1bEBl"}
+{"args":["00000000000000000000000000000000",1,false,165,147],"fn":"SignWithValues","ok":"fsMfYIpd+noD5Bkh"}
+{"args":["00000000000000000000000000000000",1,true,254,174],"fn":"SignWithValues","ok":"6QVUQzvd+ivzKZtB"}
+{"args":["00000000000000000000000000000000",63,false,210,114],"fn":"SignWithValues","ok":"fZBWBwTuyf+EHC5C"}
+{"args":["00000000000000000000000000000000",63,true,72,183],"fn":"SignWithValues","ok":"6BWQCQpZdG8HNy27"}
+{"args":["00000000000000000000000000000000",64,false,98,227],"fn":"SignWithValues","ok":"f/8p2lzfZPZYkvhe"}
+{"args":["00000000000000000000000000000000",64,true,171,88],"fn":"SignWithValues","ok":"6hNbEMkQwyCmR3W2"}
+{"args":["00000000000000000000000000000000",127,false,5,240],"fn":"SignWithValues","ok":"fMdc+huAAl2KLE8T"}
+{"args":["00000000000000000000000000000000",127,true,118,90],"fn":"SignWithValues","ok":"6hO5GKh0KwR0+Y64"}
+{"args":["00000000000000000000000000000000",200,false,43,156],"fn":"SignWithValues","ok":"fsJKJk9x3BSQ6Yae"}
+{"args":["00000000000000000000000000000000",200,true,29,126],"fn":"SignWithValues","ok":"6ZaI/y9Hj4+A0tQd"}
+{"args":["00000000000000000000000000000000",255,false,15,55],"fn":"SignWithValues","ok":"fplLPzEK3OexfjvP"}
+{"args":["00000000000000000000000000000000",255,true,196,73],"fn":"SignWithValues","ok":"6gqDaLHBNEXRVx24"}
+{"args":["00000000000000000000000000000000",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIl2/GBD"}
+{"args":["00000000000000000000000000000000",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGEihqHfx"}
+{"args":["ffffffffffffffffffffffffffffffff",0,false,33,189],"fn":"SignWithValues","ok":"fBxF0RyAldigLKWW"}
+{"args":["ffffffffffffffffffffffffffffffff",0,true,63,101],"fn":"SignWithValues","ok":"641kbLdvOUOgrIcp"}
+{"args":["ffffffffffffffffffffffffffffffff",1,false,100,234],"fn":"SignWithValues","ok":"f/PZjrDfHQloxW4n"}
+{"args":["ffffffffffffffffffffffffffffffff",1,true,223,127],"fn":"SignWithValues","ok":"6ZCpNb7LVQlQ4Vw0"}
+{"args":["ffffffffffffffffffffffffffffffff",63,false,20,42],"fn":"SignWithValues","ok":"fdPYgqeJNnVo14ms"}
+{"args":["ffffffffffffffffffffffffffffffff",63,true,114,102],"fn":"SignWithValues","ok":"642FnD3eBZTpCszD"}
+{"args":["ffffffffffffffffffffffffffffffff",64,false,140,71],"fn":"SignWithValues","ok":"fgUvUd22KHgSo0/N"}
+{"args":["ffffffffffffffffffffffffffffffff",64,true,226,35],"fn":"SignWithValues","ok":"6d02+2pBp7PSfOX3"}
+{"args":["ffffffffffffffffffffffffffffffff",127,false,209,110],"fn":"SignWithValues","ok":"f4VojIHYpMLlIwqb"}
+{"args":["ffffffffffffffffffffffffffffffff",127,true,221,140],"fn":"SignWithValues","ok":"6KnMeNoE8JUVKOrW"}
+{"args":["ffffffffffffffffffffffffffffffff",200,false,71,180],"fn":"SignWithValues","ok":"fBvGti3/e7qO8D8T"}
+{"args":["ffffffffffffffffffffffffffffffff",200,true,106,252],"fn":"SignWithValues","ok":"6MjbR88uU2482j/h"}
+{"args":["ffffffffffffffffffffffffffffffff",255,false,91,174],"fn":"SignWithValues","ok":"fQVNQzvd+ivovtOS"}
+{"args":["ffffffffffffffffffffffffffffffff",255,true,226,97],"fn":"SignWithValues","ok":"64gFFsLfkC5I7Wj6"}
+{"args":["ffffffffffffffffffffffffffffffff",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIlw1sQu"}
+{"args":["ffffffffffffffffffffffffffffffff",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGEi/CZv2"}
+{"args":["ABCDEF0123456789abcdef0123456789",0,false,245,59],"fn":"SignWithValues","ok":"fpmltd3P5EwM8C8A"}
+{"args":["ABCDEF0123456789abcdef0123456789",0,true,38,21],"fn":"SignWithValues","ok":"6k6rM0vOhmTDhDjr"}
+{"args":["ABCDEF0123456789abcdef0123456789",1,false,45,38],"fn":"SignWithValues","ok":"fd+F41n7DQEH6ozm"}
+{"args":["ABCDEF0123456789abcdef0123456789",1,true,59,168],"fn":"SignWithValues","ok":"6Qi1+kUUqpgPp+LU"}
+{"args":["ABCDEF0123456789abcdef0123456789",63,false,59,3],"fn":"SignWithValues","ok":"fD0/YipRk1v9Kl5o"}
+{"args":["ABCDEF0123456789abcdef0123456789",63,true,124,212],"fn":"SignWithValues","ok":"60wI1GxcSng1tLtr"}
+{"args":["ABCDEF0123456789abcdef0123456789",64,false,150,46],"fn":"SignWithValues","ok":"fdGtpPnBjJOdcuDt"}
+{"args":["ABCDEF0123456789abcdef0123456789",64,true,67,72],"fn":"SignWithValues","ok":"6gET5NWrOoVrqbl+"}
+{"args":["ABCDEF0123456789abcdef0123456789",127,false,1,37],"fn":"SignWithValues","ok":"fd1ZlEPcGdZaViRM"}
+{"args":["ABCDEF0123456789abcdef0123456789",127,true,107,136],"fn":"SignWithValues","ok":"6KipRvuk2ykXxmcu"}
+{"args":["ABCDEF0123456789abcdef0123456789",200,false,94,156],"fn":"SignWithValues","ok":"fsJKJk9x3BC/TeFa"}
+{"args":["ABCDEF0123456789abcdef0123456789",200,true,144,81],"fn":"SignWithValues","ok":"6h4OBaHfhD3At0S9"}
+{"args":["ABCDEF0123456789abcdef0123456789",255,false,243,32],"fn":"SignWithValues","ok":"fdpOafFS7LnguCc8"}
+{"args":["ABCDEF0123456789abcdef0123456789",255,true,176,219],"fn":"SignWithValues","ok":"60zK6xmKu74/7rxs"}
+{"args":["ABCDEF0123456789abcdef0123456789",5,true,0,254],"fn":"SignWithValues","ok":"6MV9hJc1lIUUrTQJ"}
+{"args":["ABCDEF0123456789abcdef0123456789",5,false,254,0],"fn":"SignWithValues","ok":"fDp+4KiMGENk5qvg"}
+{"args":["0000000000000000000000000000000",0,false,131,243],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",0,true,158,167],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",1,false,173,189],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",1,true,13,116],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",63,false,230,222],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",63,true,199,243],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",64,false,223,174],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",64,true,204,143],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",127,false,100,101],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",127,true,102,100],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",200,false,26,123],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",200,true,162,102],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",255,false,15,48],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",255,true,17,252],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",5,true,0,254],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000",5,false,254,0],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",0,false,53,112],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",0,true,41,28],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",1,false,87,153],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",1,true,13,26],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",63,false,0,145],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",63,true,38,137],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",64,false,25,242],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",64,true,93,157],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",127,false,6,18],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",127,true,223,53],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",200,false,157,96],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",200,true,38,162],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",255,false,64,244],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",255,true,88,154],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",5,true,0,254],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["gggggggggggggggggggggggggggggggg",5,false,254,0],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",0,false,93,121],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",0,true,31,29],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",1,false,217,124],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",1,true,254,250],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",63,false,119,122],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",63,true,123,79],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",64,false,21,36],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",64,true,26,191],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",127,false,87,189],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",127,true,67,122],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",200,false,212,177],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",200,true,41,132],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",255,false,5,52],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",255,true,243,243],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",5,true,0,254],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}
+{"args":["0000000000000000000000000000000000",5,false,254,0],"error":"X-MS-STUB 必须是 32 位十六进制 MD5","fn":"SignWithValues"}

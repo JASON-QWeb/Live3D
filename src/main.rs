@@ -7,6 +7,7 @@ mod config;
 mod desktop;
 mod dialogue;
 mod director;
+mod douyin;
 mod library;
 mod obs;
 mod output;
@@ -153,6 +154,7 @@ async fn run(headless: bool) -> Result<()> {
 
 async fn serve(listener: TcpListener, app: App, port: u16, _directory_lock: File) -> Result<()> {
     tokio::spawn(prompt_store::watch(app.clone()));
+    tokio::spawn(douyin::run(app.clone()));
     println!("Avatar3D 正在 127.0.0.1:{port} 运行");
     axum::serve(listener, server::router(app.clone(), port))
         .with_graceful_shutdown(shutdown(app.clone()))

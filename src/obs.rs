@@ -11,6 +11,44 @@ use uuid::Uuid;
 
 const SCENE: &str = "Avatar3D · 数字人";
 const SOURCE: &str = "Avatar3D · 舞台输出";
+const BUNDLE: &str = "com.obsproject.obs-studio";
+
+/// Whether OBS Studio is in an Applications folder or known to Spotlight.
+pub async fn installed() -> bool {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let folders = [
+        Some(std::path::PathBuf::from("/Applications")),
+        home.map(|h| h.join("Applications")),
+    ];
+    if folders.iter().flatten().any(|d| d.join("OBS.app").is_dir()) {
+        return true;
+    }
+    let query = tokio::process::Command::new("/usr/bin/mdfind")
+        .arg(format!("kMDItemCFBundleIdentifier == '{BUNDLE}'"))
+        .kill_on_drop(true)
+        .output();
+    matches!(
+        tokio::time::timeout(Duration::from_secs(3), query).await,
+        Ok(Ok(out)) if out.status.success() && !out.stdout.trim_ascii().is_empty()
+    )
+}
+
+/// Opens OBS Studio, or brings it to the front when it is already running.
+pub async fn open() -> Result<()> {
+    let out = tokio::process::Command::new("/usr/bin/open")
+        .args(["-b", BUNDLE])
+        .kill_on_drop(true)
+        .output();
+    let out = tokio::time::timeout(Duration::from_secs(15), out)
+        .await
+        .context("打开 OBS 超时")?
+        .context("无法调用系统打开 OBS")?;
+    ensure!(
+        out.status.success(),
+        "这台 Mac 上没有找到 OBS Studio，请先安装"
+    );
+    Ok(())
+}
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 async fn receive(ws: &mut Socket) -> Result<Value> {
     loop {
@@ -54,7 +92,15 @@ async fn call(ws: &mut Socket, name: &str, data: Value) -> Result<Value> {
             continue;
         }
         let s = &r["d"]["requestStatus"];
-        ensure!(s["result"] == true, "OBS {name} 请求失败（{}）", s["code"]);
+        let comment = s["comment"]
+            .as_str()
+            .map(|c| format!("：{c}"))
+            .unwrap_or_default();
+        ensure!(
+            s["result"] == true,
+            "OBS {name} 请求失败（{}{comment}）",
+            s["code"]
+        );
         return Ok(r["d"]["responseData"].clone());
     }
 }
@@ -115,17 +161,177 @@ async fn configure(ws: &mut Socket, url: &str) -> Result<Value> {
     .await?;
     Ok(json!({"scene":SCENE,"created":true}))
 }
-pub async fn setup(app: &App, port: u16, password: &str, host: &str) -> Result<Value> {
+/// Runs `op` on one authenticated OBS connection, one request group at a time.
+async fn with_obs<T>(
+    app: &App,
+    port: u16,
+    password: &str,
+    op: impl AsyncFnOnce(&mut Socket) -> Result<T>,
+) -> Result<T> {
     ensure!(port > 0 && password.len() < 2048, "OBS 连接参数无效");
     let _guard = app.obs_gate.lock().await;
-    let url = format!("http://{host}/stage#{}", app.tokens.stage);
-    let op = async {
+    let run = async {
         let mut ws = connect(port, password).await?;
-        let result = configure(&mut ws, &url).await;
+        let result = op(&mut ws).await;
         let _ = ws.close(None).await;
         result
     };
-    tokio::time::timeout(Duration::from_secs(12), op)
+    tokio::time::timeout(Duration::from_secs(12), run)
         .await
         .context("本机 OBS 响应超时")?
+}
+/// The stage source plays on this Mac's audio output as well as into OBS's
+/// stream and recording, so apps that capture system audio, such as
+/// 抖音直播伴侣 on macOS, hear the avatar. OBS's virtual camera carries no audio.
+const STAGE_MONITOR: &str = "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT";
+
+pub async fn setup(app: &App, port: u16, password: &str, host: &str) -> Result<Value> {
+    let url = format!("http://{host}/stage#{}", app.tokens.stage);
+    with_obs(app, port, password, async |ws| {
+        let result = configure(ws, &url).await?;
+        // Applied every time, so a scene set up before this existed is fixed too.
+        call(
+            ws,
+            "SetInputAudioMonitorType",
+            json!({"inputName":SOURCE,"monitorType":STAGE_MONITOR}),
+        )
+        .await?;
+        Ok(result)
+    })
+    .await
+}
+
+/// Streaming state, destination and program scene. The stream key never leaves the server.
+async fn stream_state(ws: &mut Socket) -> Result<Value> {
+    let out = call(ws, "GetStreamStatus", json!({})).await?;
+    let service = call(ws, "GetStreamServiceSettings", json!({})).await?;
+    let program = call(ws, "GetCurrentProgramScene", json!({})).await?;
+    let settings = &service["streamServiceSettings"];
+    let custom = service["streamServiceType"] == "rtmp_custom";
+    let scene = program["currentProgramSceneName"].as_str().unwrap_or("");
+    Ok(json!({
+        "live": out["outputActive"] == true,
+        "reconnecting": out["outputReconnecting"] == true,
+        "duration_ms": out["outputDuration"].as_u64().unwrap_or(0),
+        "skipped_frames": out["outputSkippedFrames"].as_u64().unwrap_or(0),
+        "total_frames": out["outputTotalFrames"].as_u64().unwrap_or(0),
+        "custom": custom,
+        "server": if custom { settings["server"].as_str().unwrap_or("") } else { "" },
+        "service": if custom { "" } else { settings["service"].as_str().unwrap_or("") },
+        "key_set": settings["key"].as_str().is_some_and(|k| !k.trim().is_empty()),
+        "scene": scene,
+        "avatar_scene": scene == SCENE,
+    }))
+}
+pub async fn stream_status(app: &App, port: u16, password: &str) -> Result<Value> {
+    with_obs(app, port, password, async |ws| stream_state(ws).await).await
+}
+
+fn check_stream_server(server: &str) -> Result<()> {
+    let parsed = url::Url::parse(server).ok();
+    ensure!(
+        server.len() <= 2048
+            && parsed.as_ref().is_some_and(|u| {
+                ["rtmp", "rtmps", "srt", "rist"].contains(&u.scheme()) && u.host().is_some()
+            }),
+        "推流地址要以 rtmp://、rtmps:// 或 srt:// 开头"
+    );
+    Ok(())
+}
+
+/// Points OBS at a custom RTMP/SRT server. OBS saves it in the current profile.
+/// An empty key keeps the key OBS already has for its custom server.
+pub async fn set_stream(
+    app: &App,
+    port: u16,
+    password: &str,
+    server: &str,
+    key: &str,
+) -> Result<Value> {
+    let (server, key) = (server.trim(), key.trim());
+    check_stream_server(server)?;
+    ensure!(
+        key.len() <= 4096 && !key.chars().any(char::is_control),
+        "推流码格式无效"
+    );
+    with_obs(app, port, password, async |ws| {
+        let out = call(ws, "GetStreamStatus", json!({})).await?;
+        ensure!(
+            out["outputActive"] != true,
+            "正在直播，先结束直播再改推流设置"
+        );
+        let key = if key.is_empty() {
+            let current = call(ws, "GetStreamServiceSettings", json!({})).await?;
+            current["streamServiceSettings"]["key"]
+                .as_str()
+                .filter(|k| current["streamServiceType"] == "rtmp_custom" && !k.is_empty())
+                .context("请填写推流码")?
+                .to_owned()
+        } else {
+            key.to_owned()
+        };
+        call(
+            ws,
+            "SetStreamServiceSettings",
+            json!({
+                "streamServiceType": "rtmp_custom",
+                "streamServiceSettings": {"server": server, "key": key},
+            }),
+        )
+        .await?;
+        stream_state(ws).await
+    })
+    .await
+}
+
+/// Starts or stops the OBS stream output, then waits briefly for OBS to report the change.
+pub async fn set_live(app: &App, port: u16, password: &str, live: bool) -> Result<Value> {
+    with_obs(app, port, password, async |ws| {
+        let state = stream_state(ws).await?;
+        if state["live"] == live {
+            return Ok(state);
+        }
+        if live {
+            ensure!(
+                state["key_set"] == true,
+                "OBS 还没有推流码，请先填写推流地址和推流码，点「保存到 OBS」"
+            );
+            call(ws, "StartStream", json!({})).await?;
+        } else {
+            call(ws, "StopStream", json!({})).await?;
+        }
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let state = stream_state(ws).await?;
+            if state["live"] == live {
+                return Ok(state);
+            }
+        }
+        stream_state(ws).await
+    })
+    .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_stream_server;
+
+    #[test]
+    fn accepts_push_servers_and_rejects_other_urls() {
+        for ok in [
+            "rtmp://push-rtmp-l1.douyincdn.com/stage",
+            "rtmps://a.rtmps.youtube.com:443/live2",
+            "srt://live.example.com:9000?streamid=abc",
+        ] {
+            assert!(check_stream_server(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "",
+            "push.example.com/live",
+            "https://example.com/live",
+            "rtmp://",
+        ] {
+            assert!(check_stream_server(bad).is_err(), "{bad}");
+        }
+    }
 }

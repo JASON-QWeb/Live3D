@@ -8,4 +8,6 @@ Vidu 云端数字人服务由用户使用自己的账户接入，计费和使用
 
 本机模型通过单独的 Python 环境下载。Ming、ZONOS 与 Qwen 的权重、所选音色、分词器与运行库分别遵循各自分发的条款。使用自己的克隆音色时，应取得对应声音及录音的授权。macOS 系统语音用于个人试听，公开播出请选择具备相应使用权的语音来源。[Ming 4-bit 模型卡](https://huggingface.co/jorgepb96/Ming-3.0-tts-0.5B-4bit) · [ZONOS3-Mini 模型卡](https://huggingface.co/mlx-community/ZONOS3-Mini) · [Qwen 模型卡](https://huggingface.co/mlx-community/Qwen2.5-1.5B-Instruct-4bit) · [MLX Audio](https://github.com/Blaizzy/mlx-audio) · [MLX LM](https://github.com/ml-explore/mlx-lm) · [Apple 软件许可](https://www.apple.com/legal/sla/)
 
+抖音弹幕连接（`src/douyin/` 的签名、参数拼接、页面解析和消息格式）移植自 douyinLive 的 commit af34f7c，原作者今晚打打，MIT 许可证。protobuf 字段编号取自 douyinlive-proto v0.1.3。`src/douyin/recorded/` 里的对照数据是用 rust-anything 记录的 douyinLive 原版输出。这些都不是抖音官方接口，使用时应遵守抖音的用户协议。[douyinLive](https://github.com/jwwsjlm/douyinLive) · [douyinlive-proto](https://github.com/jwwsjlm/douyinlive-proto) · [rust-anything](https://github.com/erkamyaman/rust-anything)
+
 Rust 依赖版本由 Cargo.lock 固定。打包脚本按当前构建平台收集依赖的许可证正文，随应用存放于 Contents/Resources/ThirdParty.txt。

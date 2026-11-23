@@ -62,6 +62,11 @@ pub fn routes() -> Router<App> {
     Router::new()
         .route("/api/status", get(status))
         .route("/api/obs", post(obs_setup))
+        .route("/api/obs/app", get(obs_app).post(obs_open))
+        .route(
+            "/api/obs/stream",
+            get(obs_stream).put(obs_stream_set).post(obs_live),
+        )
         .route("/api/tracks", get(tracks).delete(tracks_clear))
         .route("/api/tracks/{id}/audio", get(track_audio))
         .route("/api/tracks/{id}/wav", get(track_wav))
@@ -303,7 +308,7 @@ async fn media(State(app): S, b: Bytes) -> Api<Json<Value>> {
     Ok(ok())
 }
 async fn voice(State(app): S) -> Json<Value> {
-    Json(json!({"message":services::ModelService::Voice.status(&app).await}))
+    Json(services::ModelService::Voice.status(&app).await)
 }
 async fn launch(State(app): S) -> Api<Json<Value>> {
     Ok(Json(
@@ -401,7 +406,7 @@ async fn balance(State(app): S) -> Api<Json<Value>> {
 }
 
 async fn model_status(State(app): S) -> Json<Value> {
-    Json(json!({"message":services::ModelService::Chat.status(&app).await}))
+    Json(services::ModelService::Chat.status(&app).await)
 }
 async fn model_start(State(app): S) -> Api<Json<Value>> {
     Ok(Json(
@@ -417,7 +422,37 @@ async fn reply_preview(State(app): S, Json(q): Json<Words>) -> Api<Response> {
 #[derive(Deserialize)]
 struct Obs {
     port: u16,
+    /// Empty means the password saved after the last successful connection.
+    #[serde(default)]
     password: String,
+}
+impl Obs {
+    fn password(&self) -> Result<String> {
+        if self.password.is_empty() {
+            return Ok(config::key("obs")?.unwrap_or_default());
+        }
+        Ok(self.password.clone())
+    }
+    /// Keeps a port and password that just worked, so later calls can omit them.
+    async fn remember(&self, app: &App) -> Result<()> {
+        let new_password =
+            !self.password.is_empty() && config::key("obs")?.as_deref() != Some(&self.password);
+        let new_port = app.config().obs_port != self.port;
+        if !new_password && !new_port {
+            return Ok(());
+        }
+        let _g = app.gate.lock().await;
+        if new_password {
+            config::store_key("obs", &self.password)?;
+        }
+        if new_port {
+            let mut c = app.config();
+            c.obs_port = self.port;
+            config::write_json(&app.dir.join("settings.json"), &c)?;
+            *lock(&app.conf) = c;
+        }
+        Ok(())
+    }
 }
 async fn obs_setup(
     State(app): S,
@@ -428,9 +463,54 @@ async fn obs_setup(
         .get(header::HOST)
         .and_then(|v| v.to_str().ok())
         .context("缺少本机地址")?;
+    let r = crate::obs::setup(&app, q.port, &q.password()?, host).await?;
+    q.remember(&app).await?;
+    Ok(Json(r))
+}
+async fn obs_stream(State(app): S) -> Api<Json<Value>> {
+    let password = config::key("obs")?.unwrap_or_default();
+    let port = app.config().obs_port;
     Ok(Json(
-        crate::obs::setup(&app, q.port, &q.password, host).await?,
+        crate::obs::stream_status(&app, port, &password).await?,
     ))
+}
+#[derive(Deserialize)]
+struct StreamTarget {
+    #[serde(flatten)]
+    obs: Obs,
+    server: String,
+    #[serde(default)]
+    key: String,
+}
+async fn obs_stream_set(State(app): S, Json(q): Json<StreamTarget>) -> Api<Json<Value>> {
+    let password = q.obs.password()?;
+    let r = crate::obs::set_stream(&app, q.obs.port, &password, &q.server, &q.key).await?;
+    q.obs.remember(&app).await?;
+    Ok(Json(r))
+}
+#[derive(Deserialize)]
+struct GoLive {
+    #[serde(flatten)]
+    obs: Obs,
+    /// Omitted: only read the state, with the port and password in this request.
+    #[serde(default)]
+    live: Option<bool>,
+}
+async fn obs_live(State(app): S, Json(q): Json<GoLive>) -> Api<Json<Value>> {
+    let password = q.obs.password()?;
+    let r = match q.live {
+        Some(live) => crate::obs::set_live(&app, q.obs.port, &password, live).await?,
+        None => crate::obs::stream_status(&app, q.obs.port, &password).await?,
+    };
+    q.obs.remember(&app).await?;
+    Ok(Json(r))
+}
+async fn obs_app() -> Json<Value> {
+    Json(json!({"installed":crate::obs::installed().await}))
+}
+async fn obs_open() -> Api<Json<Value>> {
+    crate::obs::open().await?;
+    Ok(ok())
 }
 async fn soundcheck(State(app): S, Json(q): Json<Words>) -> Api<Json<Value>> {
     let line = text(&q.text, 500)?;
