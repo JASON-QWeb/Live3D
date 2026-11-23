@@ -1,3 +1,4 @@
+pub use crate::paths::{env_file_path, qa_file_path, song_titles_file_path};
 use anyhow::{Context, Result, bail, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -16,24 +17,6 @@ pub const MING: &str = "jorgepb96/Ming-3.0-tts-0.5B-4bit";
 pub const ZONOS: &str = "mlx-community/ZONOS3-Mini";
 pub const MING_VOICE: &str = "灵小柔";
 pub const ZONOS_VOICE: &str = "willow";
-pub fn qa_file_path(is_english: bool) -> Option<PathBuf> {
-    let root = find_project_root()?;
-    Some(root.join(if is_english {
-        "avatars/en/knowledge_base.txt"
-    } else {
-        "avatars/cn/xiaorou_knowledge_base.txt"
-    }))
-}
-
-pub fn song_titles_file_path(is_english: bool) -> Option<PathBuf> {
-    let root = find_project_root()?;
-    Some(root.join(if is_english {
-        "avatars/en/song_titles.txt"
-    } else {
-        "avatars/cn/song_titles.txt"
-    }))
-}
-
 fn strip_audio_ext(s: &str) -> &str {
     let trimmed = s.trim().trim_start_matches('\u{feff}').trim();
     const EXTS: [&str; 9] = [
@@ -563,38 +546,6 @@ fn key_env_vars(name: &str) -> &'static [&'static str] {
         "youtube" => &["AVATAR3D_YOUTUBE_KEY", "YOUTUBE_API_KEY"],
         _ => &[],
     }
-}
-
-fn find_project_root() -> Option<PathBuf> {
-    if let Ok(cwd) = env::current_dir()
-        && (cwd.join(".env").is_file() || cwd.join("Cargo.toml").is_file())
-    {
-        return Some(cwd);
-    }
-    if let Ok(exe) = env::current_exe() {
-        for dir in exe.ancestors().skip(1) {
-            if dir.join(".env").is_file() || dir.join("Cargo.toml").is_file() {
-                return Some(dir.to_path_buf());
-            }
-        }
-    }
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    if manifest_dir.is_dir() {
-        return Some(manifest_dir);
-    }
-    None
-}
-
-pub fn env_file_path() -> Result<PathBuf> {
-    if let Some(p) = env::var_os("AVATAR3D_ENV_FILE")
-        && !p.is_empty()
-    {
-        return Ok(PathBuf::from(p));
-    }
-    if let Some(root) = find_project_root() {
-        return Ok(root.join(".env"));
-    }
-    Ok(data_dir()?.join(".env"))
 }
 
 fn parse_env_line(line: &str) -> Option<(String, String)> {

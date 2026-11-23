@@ -26,6 +26,16 @@ export async function api(path, payload, method) {
   }
   return (await request(path, opts)).json();
 }
+
+// WebKit needs the clipboard write to begin in the click, before the access request settles.
+export function copyText(text) {
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+    const value = text.then((s) => new Blob([s], { type: "text/plain" }));
+    return navigator.clipboard.write([new ClipboardItem({ "text/plain": value })]);
+  }
+  return text.then((s) => navigator.clipboard.writeText(s));
+}
+
 let timer;
 export function notify(text) {
   el("notice").textContent = text;
@@ -229,8 +239,74 @@ export async function voiceStatus() {
   }
 }
 
+function setupCompanion() {
+  const panel = el("douyinCompanion");
+  panel.innerHTML = `
+    <label><span>读取抖音直播伴侣</span>
+      <select id="companionMode">
+        <option value="off">关闭</option>
+        <option value="preview">只读预览</option>
+        <option value="forward">接入数字人</option>
+      </select>
+    </label>
+    <output class="meta" role="status" hidden></output>
+    <details class="sub-disclosure" hidden>
+      <summary>最近采集记录</summary><ul class="sub-fields"></ul>
+    </details>`;
+  const select = el("companionMode"), status = panel.querySelector("output");
+  const records = panel.querySelector("details"), list = panel.querySelector("ul");
+  let revision = 0, reading = false, previousRows = "";
+
+  function paint(view) {
+    select.value = view.mode;
+    if (status.textContent !== view.status) status.textContent = view.status;
+    status.hidden = !view.status;
+    records.hidden = !view.rows.length;
+    const key = JSON.stringify(view.rows);
+    if (key === previousRows) return;
+    previousRows = key;
+    list.replaceChildren(...view.rows.map((row) => {
+      const item = document.createElement("li");
+      item.textContent = [row.kind, row.detail, row.result].join(" · ");
+      return item;
+    }));
+  }
+
+  async function refresh() {
+    if (!token || select.disabled || reading || document.hidden || el("config").hidden) return;
+    reading = true;
+    const requested = revision;
+    try {
+      const view = await api("/api/douyin-companion");
+      if (revision === requested) paint(view);
+    } catch (e) {
+      if (revision === requested) {
+        status.textContent = e.message;
+        status.hidden = false;
+      }
+    } finally {
+      reading = false;
+    }
+  }
+  select.onchange = async () => {
+    revision++;
+    select.disabled = true;
+    try {
+      paint(await api("/api/douyin-companion", { mode: select.value }));
+    } catch (e) {
+      notify(e.message);
+    } finally {
+      select.disabled = false;
+      void refresh();
+    }
+  };
+  void refresh();
+  setInterval(refresh, 1500);
+}
+
 export function setupConfig(updated) {
   onUpdate = updated;
+  setupCompanion();
   el("settings").addEventListener("submit", (e) => e.preventDefault());
   el("liveLanguage")?.addEventListener("change", (e) => syncLanguageUI(e.target.value));
   action("reloadPrompt", () => loadPrompt(el("liveLanguage").value));
@@ -324,8 +400,7 @@ export function setupConfig(updated) {
   });
   let ingestTimer;
   action("copyIngest", async () => {
-    const a = await api("/api/access");
-    await navigator.clipboard.writeText(location.origin + "/api/ingest\nAuthorization: Bearer " + a.ingest);
+    await copyText(api("/api/access").then((a) => location.origin + "/api/ingest\nAuthorization: Bearer " + a.ingest));
     const btn = el("copyIngest");
     btn.textContent = "已复制弹幕接入信息";
     clearTimeout(ingestTimer);

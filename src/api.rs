@@ -15,6 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post, put},
 };
+use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -691,6 +692,7 @@ async fn stage_events(State(app): S) -> Response {
                 }
             }
         });
+    let stream = stream.take_until(app.quit.clone().cancelled_owned());
     let mut r = Response::new(axum::body::Body::from_stream(stream));
     r.headers_mut().insert(
         header::CONTENT_TYPE,
@@ -710,4 +712,21 @@ struct Choreo {
 async fn choreo(State(app): S, Json(q): Json<Choreo>) -> Api<Json<Value>> {
     crate::choreo::enable(&app, q.on)?;
     Ok(ok())
+}
+
+#[cfg(test)]
+mod stage_shutdown_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn an_open_stage_stream_finishes_when_the_studio_quits() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = crate::state::Inner::new(dir.path().to_owned()).unwrap();
+        let response = stage_events(State(app.clone())).await;
+        let mut events = response.into_body().into_data_stream();
+        assert!(events.next().await.unwrap().is_ok());
+        app.quit.cancel();
+        let end = tokio::time::timeout(std::time::Duration::from_secs(2), events.next()).await;
+        assert!(end.unwrap().is_none());
+    }
 }

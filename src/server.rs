@@ -105,7 +105,16 @@ pub fn router(app: App, port: u16) -> Router {
                 )
             }),
         )
-        .route("/health", get(|| async { "avatar3d-live" }))
+        .route(
+            "/health",
+            get(|| async {
+                (
+                    [("x-avatar3d-version", env!("CARGO_PKG_VERSION"))],
+                    "avatar3d-live",
+                )
+            }),
+        )
+        .merge(crate::companion::routes(app.clone(), port))
         .merge(api::routes())
         .layer(middleware::from_fn_with_state((app.clone(), port), guard))
         .with_state(app)

@@ -4,12 +4,12 @@
 <key>CFBundleName</key><string>Avatar3D Live</string>
 <key>CFBundleDisplayName</key><string>Avatar3D Live</string>
 <key>CFBundleIdentifier</key><string>studio.avatar3d.control</string>
-<key>CFBundleExecutable</key><string>Avatar3DLauncher</string>
+<key>CFBundleExecutable</key><string>avatar3d-live</string>
 <key>CFBundleIconFile</key><string>Avatar3D</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>2</string>
-<key>CFBundleShortVersionString</key><string>0.1.1</string>
-<key>LSUIElement</key><true/>
+<key>CFBundleVersion</key><string>3</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
+<key>NSAccessibilityUsageDescription</key><string>读取抖音直播伴侣互动面板中的评论和礼物。</string>
 </dict></plist>

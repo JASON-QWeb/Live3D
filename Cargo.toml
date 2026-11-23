@@ -1,6 +1,6 @@
 [package]
 name = "avatar3d-live"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT"
 description = "A macOS live studio for interactive avatar speech, audience chat, and stage cues"
@@ -23,6 +23,9 @@ uuid = { version = "1", features = ["v4", "serde"] }
 sha2 = "0.10"
 subtle = "2"
 url = "2"
+
+[build-dependencies]
+cc = "1"
 
 [profile.release]
 strip = true

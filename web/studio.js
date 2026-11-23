@@ -1,6 +1,7 @@
 import {
   el,
   api,
+  copyText,
   request,
   token,
   action,
@@ -330,7 +331,7 @@ async function stageUrl() {
 
 let copyTimer;
 action("copyStage", async () => {
-  await navigator.clipboard.writeText(await stageUrl());
+  await copyText(stageUrl());
   const btn = el("copyStage");
   btn.classList.add("is-copied");
   setButtonLabel(btn, "已复制地址");
