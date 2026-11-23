@@ -7,9 +7,8 @@
 <key>CFBundleExecutable</key><string>avatar3d-live</string>
 <key>CFBundleIconFile</key><string>Avatar3D</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>3</string>
+<key>CFBundleVersion</key><string>4</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
-<key>NSAccessibilityUsageDescription</key><string>读取抖音直播伴侣互动面板中的评论和礼物。</string>
 </dict></plist>

@@ -18,31 +18,23 @@ trap 'if [[ ! -e "$stage/previous.app" ]]; then rm -rf "$stage"; fi' EXIT
 identity="${AVATAR3D_SIGN_IDENTITY:--}"
 sign=(--force --sign "$identity")
 if [[ "$identity" != "-" ]]; then sign+=(--options runtime); fi
-cargo build --locked --release --bin avatar3d-live --message-format=json-render-diagnostics | python3 -c '
-import json, pathlib, sys
-build_dirs = {}
+executable="$(cargo build --locked --release --bin avatar3d-live --message-format=json-render-diagnostics | python3 -c '
+import json, sys
 executable = None
 for message in map(json.loads, sys.stdin):
-    if message["reason"] == "build-script-executed":
-        build_dirs[message["package_id"]] = pathlib.Path(message["out_dir"])
-    elif (message["reason"] == "compiler-artifact" and message["target"]["name"] == "avatar3d-live"
-          and message["executable"]):
+    if (message["reason"] == "compiler-artifact" and message["target"]["name"] == "avatar3d-live"
+            and message["executable"]):
         executable = message["executable"]
-        package = message["package_id"]
 if executable is None:
     sys.exit("Cargo 未生成 avatar3d-live 可执行文件")
 print(executable)
-print(build_dirs[package] / "avatar3d-douyin")
-' > "$stage/artifacts"
-{ IFS= read -r executable; IFS= read -r reader; } < "$stage/artifacts"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources"
+')"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 install -m 644 packaging/Info.plist "$app/Contents/Info.plist"
 version="$("$executable" --version)"
 plutil -insert CFBundleShortVersionString -string "${version#Avatar3D Live }" "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist"
 install -m 755 "$executable" "$app/Contents/MacOS/avatar3d-live"
-install -m 755 "$reader" "$app/Contents/Helpers/avatar3d-douyin"
-codesign "${sign[@]}" --identifier studio.avatar3d.douyin "$app/Contents/Helpers/avatar3d-douyin"
 install -m 644 packaging/Avatar3D.icns "$app/Contents/Resources/Avatar3D.icns"
 install -m 644 LICENSE "$app/Contents/Resources/LICENSE"
 install -m 644 NOTICE.md "$app/Contents/Resources/NOTICE.md"

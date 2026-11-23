@@ -2,7 +2,6 @@ mod api;
 mod audience;
 mod audio;
 mod choreo;
-mod companion;
 mod config;
 mod desktop;
 mod dialogue;

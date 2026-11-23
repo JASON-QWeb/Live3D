@@ -12,7 +12,7 @@ unsafe extern "C" {
         request_quit: extern "C" fn(*const c_void),
     );
     fn avatar3d_service_ended();
-    fn avatar3d_startup_error(message: *const c_char);
+    fn avatar3d_startup_error(message: *const c_char, english: *const c_char);
 }
 
 extern "C" fn request_quit(context: *const c_void) {
@@ -33,8 +33,40 @@ pub fn service_ended() {
     unsafe { avatar3d_service_ended() };
 }
 
+fn english_startup_message(error: &anyhow::Error) -> String {
+    let translations: std::collections::HashMap<String, String> =
+        serde_json::from_str(include_str!("../web/i18n-en.json")).expect("English dictionary");
+    error
+        .chain()
+        .map(|cause| {
+            let text = cause.to_string();
+            translations.get(&text).cloned().unwrap_or(text)
+        })
+        .collect::<Vec<_>>()
+        .join(": ")
+}
+
 pub fn startup_error(error: &anyhow::Error) {
-    if let Ok(message) = CString::new(format!("{error:#}")) {
-        unsafe { avatar3d_startup_error(message.as_ptr()) };
+    let english = english_startup_message(error);
+    if let (Ok(message), Ok(english)) = (CString::new(format!("{error:#}")), CString::new(english))
+    {
+        unsafe { avatar3d_startup_error(message.as_ptr(), english.as_ptr()) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn localizes_startup_context_and_preserves_the_underlying_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = std::fs::File::open(dir.path().join("studio.lock")).unwrap_err();
+        let os_message = missing.to_string();
+        let error = anyhow::Error::new(missing).context("该端口上的 Avatar3D 使用其他数据目录");
+        assert_eq!(
+            super::english_startup_message(&error),
+            format!(
+                "The Avatar3D instance on this port is using a different data folder: {os_message}"
+            )
+        );
     }
 }

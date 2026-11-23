@@ -3,6 +3,7 @@
 #import "FilePicker.h"
 
 typedef void (*QuitCallback)(const void *);
+static NSString *const InterfaceLanguageKey = @"Avatar3DInterfaceLanguage";
 
 @interface AvatarDesktop : NSObject <NSApplicationDelegate, NSWindowDelegate, WKUIDelegate, WKNavigationDelegate>
 @property(nonatomic, strong) NSURL *controlURL;
@@ -89,9 +90,23 @@ static void installMenus(AvatarDesktop *desktop) {
     return NO;
 }
 
+- (BOOL)allowNavigation:(WKNavigationAction *)action fromView:(WKWebView *)view {
+    NSURL *url = action.request.URL;
+    BOOL local = [url.scheme isEqualToString:self.controlURL.scheme] &&
+                 [url.host isEqualToString:self.controlURL.host] && [url.port isEqual:self.controlURL.port];
+    if (local || [url.absoluteString isEqualToString:@"about:blank"]) return YES;
+    if (view == self.controlWindow.contentView && action.sourceFrame.mainFrame &&
+        action.navigationType == WKNavigationTypeLinkActivated &&
+        [url.absoluteString isEqualToString:@"https://obsproject.com/download"]) {
+        [NSWorkspace.sharedWorkspace openURL:url];
+    }
+    return NO;
+}
+
 - (WKWebView *)webView:(WKWebView *)view createWebViewWithConfiguration:(WKWebViewConfiguration *)config
     forNavigationAction:(WKNavigationAction *)action windowFeatures:(WKWindowFeatures *)features {
     if (view != self.controlWindow.contentView) return nil;
+    if (action.request.URL && ![self allowNavigation:action fromView:view]) return nil;
     [self.stageWindow close];
     WKWebView *stage = [[WKWebView alloc] initWithFrame:NSZeroRect configuration:config];
     self.stageWindow = [self windowForView:stage title:@"Avatar3D Live · 独立舞台" size:NSMakeSize(720, 800)];
@@ -113,11 +128,17 @@ static void installMenus(AvatarDesktop *desktop) {
         decide(WKNavigationActionPolicyAllow);
         return;
     }
-    NSURL *url = action.request.URL;
-    BOOL local = [url.scheme isEqualToString:self.controlURL.scheme] &&
-                 [url.host isEqualToString:self.controlURL.host] && [url.port isEqual:self.controlURL.port];
-    decide(local || [url.absoluteString isEqualToString:@"about:blank"]
-           ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+    decide([self allowNavigation:action fromView:view] ? WKNavigationActionPolicyAllow : WKNavigationActionPolicyCancel);
+}
+
+- (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
+    if (view != self.controlWindow.contentView || ![view.URL.path isEqualToString:@"/"]) return;
+    // Startup alerts can appear before WebKit loads the console on the next launch.
+    [view evaluateJavaScript:@"localStorage.getItem('avatar3d.ui-lang') || 'zh'" completionHandler:^(id language, NSError *error) {
+        if (!error && ([language isEqual:@"zh"] || [language isEqual:@"en"])) {
+            [NSUserDefaults.standardUserDefaults setObject:language forKey:InterfaceLanguageKey];
+        }
+    }];
 }
 
 - (void)webView:(WKWebView *)view runOpenPanelWithParameters:(WKOpenPanelParameters *)parameters
@@ -162,15 +183,17 @@ void avatar3d_service_ended(void) {
     });
 }
 
-void avatar3d_startup_error(const char *message) {
+void avatar3d_startup_error(const char *message, const char *englishMessage) {
     @autoreleasepool {
         if (![NSBundle.mainBundle.bundleURL.pathExtension isEqualToString:@"app"]) return;
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         if (@available(macOS 14.0, *)) [NSApp activate];
         NSAlert *alert = [NSAlert new];
-        alert.messageText = @"无法启动 Avatar3D Live";
-        alert.informativeText = [NSString stringWithUTF8String:message];
+        NSString *language = [NSUserDefaults.standardUserDefaults stringForKey:InterfaceLanguageKey] ?: NSLocale.preferredLanguages.firstObject;
+        BOOL english = [language hasPrefix:@"en"];
+        alert.messageText = english ? @"Couldn't start Avatar3D Live" : @"无法启动 Avatar3D Live";
+        alert.informativeText = [NSString stringWithUTF8String:english ? englishMessage : message];
         [alert runModal];
     }
 }

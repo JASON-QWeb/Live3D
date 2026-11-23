@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Lists console text that has no English in web/i18n.js.
+"""Lists console text that has no English in web/i18n-en.json.
 
 Checks the fixed text in web/index.html, the Chinese strings in the console
 scripts, and the messages the Rust backend can show in the console. Run it
@@ -37,9 +37,8 @@ PARTS = {u"参考图", u"姿态复位", u"形象切换", u"云端操作", u"执�
 
 
 def english_keys():
-    src = io.open("web/i18n.js", encoding="utf-8").read()
-    body = src[src.index("const EN = {"):src.index("\n};\n")]
-    return {json.loads(m.group(1)) for m in re.finditer(r'^\s*("(?:[^"\\]|\\.)*")\s*:', body, re.M)}
+    with io.open("web/i18n-en.json", encoding="utf-8") as source:
+        return set(json.load(source))
 
 
 def template(s):

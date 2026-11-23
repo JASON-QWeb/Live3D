@@ -88,6 +88,15 @@ pub fn router(app: App, port: u16) -> Router {
             get(|| async { js(include_str!("../web/i18n.js")) }),
         )
         .route(
+            "/i18n-en.json",
+            get(|| async {
+                (
+                    [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+                    include_str!("../web/i18n-en.json"),
+                )
+            }),
+        )
+        .route(
             "/stage.js",
             get(|| async { js(include_str!("../web/stage.js")) }),
         )
@@ -118,7 +127,6 @@ pub fn router(app: App, port: u16) -> Router {
                 )
             }),
         )
-        .merge(crate::companion::routes(app.clone(), port))
         .merge(api::routes())
         .layer(middleware::from_fn_with_state((app.clone(), port), guard))
         .with_state(app)

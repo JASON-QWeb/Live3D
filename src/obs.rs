@@ -239,8 +239,21 @@ fn check_stream_server(server: &str) -> Result<()> {
     Ok(())
 }
 
-/// Points OBS at a custom RTMP/SRT server. OBS saves it in the current profile.
-/// An empty key keeps the key OBS already has for its custom server.
+fn saved_stream_key(service: &Value, server: &str) -> Result<String> {
+    let settings = &service["streamServiceSettings"];
+    ensure!(
+        service["streamServiceType"] == "rtmp_custom"
+            && settings["server"].as_str() == Some(server),
+        "请为此推流地址填写推流码"
+    );
+    settings["key"]
+        .as_str()
+        .filter(|key| !key.trim().is_empty())
+        .map(str::to_owned)
+        .context("请填写推流码")
+}
+
+/// OBS stores the destination and its key together in the current profile.
 pub async fn set_stream(
     app: &App,
     port: u16,
@@ -262,11 +275,7 @@ pub async fn set_stream(
         );
         let key = if key.is_empty() {
             let current = call(ws, "GetStreamServiceSettings", json!({})).await?;
-            current["streamServiceSettings"]["key"]
-                .as_str()
-                .filter(|k| current["streamServiceType"] == "rtmp_custom" && !k.is_empty())
-                .context("请填写推流码")?
-                .to_owned()
+            saved_stream_key(&current, server)?
         } else {
             key.to_owned()
         };
@@ -314,7 +323,31 @@ pub async fn set_live(app: &App, port: u16, password: &str, live: bool) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use super::check_stream_server;
+    use super::{check_stream_server, saved_stream_key};
+    use serde_json::json;
+
+    #[test]
+    fn keeps_a_stream_key_only_for_its_existing_custom_destination() {
+        let server = "rtmps://a.rtmps.youtube.com:443/live2";
+        let key = uuid::Uuid::new_v4().to_string();
+        let mut service = json!({
+            "streamServiceType": "rtmp_custom",
+            "streamServiceSettings": { "server": server, "key": key }
+        });
+        assert_eq!(saved_stream_key(&service, server).unwrap(), key);
+        for changed in [
+            "rtmp://push-rtmp-l1.douyincdn.com/stage",
+            "rtmps://a.rtmps.youtube.com:443/",
+            "rtmp://a.rtmps.youtube.com:443/live2",
+        ] {
+            assert!(saved_stream_key(&service, changed).is_err());
+        }
+        service["streamServiceType"] = json!("rtmp_common");
+        assert!(saved_stream_key(&service, server).is_err());
+        service["streamServiceType"] = json!("rtmp_custom");
+        service["streamServiceSettings"]["key"] = json!("");
+        assert!(saved_stream_key(&service, server).is_err());
+    }
 
     #[test]
     fn accepts_push_servers_and_rejects_other_urls() {
