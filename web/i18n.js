@@ -1,9 +1,9 @@
 // Console interface language. Chinese is the source text everywhere: in the
-// page, in these scripts and in messages from the Avatar3D backend. EN maps
+// page, in these scripts and in messages from the Vorela backend. EN maps
 // each Chinese string or template to English; "{0}", "{1}" mark values.
 // Anything missing from EN shows in Chinese.
 
-const KEY = "avatar3d.ui-lang";
+const KEY = "vorela.ui-lang";
 let stored = null;
 try {
   stored = localStorage.getItem(KEY);
@@ -58,7 +58,7 @@ function compile() {
 }
 
 /**
- * A message from the Avatar3D backend, in the interface language. Values
+ * A message from the Vorela backend, in the interface language. Values
  * inside a template, such as another message or a platform name, are
  * translated too; viewer text that matches nothing stays as it is.
  */

@@ -9,7 +9,7 @@ fn main() {
         .files(["native/desktop/Window.m", "native/desktop/FilePicker.m"])
         .flag("-fobjc-arc")
         .flag("-fblocks")
-        .compile("avatar3d_desktop");
+        .compile("vorela_desktop");
     for framework in ["AppKit", "Foundation", "WebKit", "UniformTypeIdentifiers"] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }

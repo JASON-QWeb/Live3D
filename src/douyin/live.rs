@@ -1,4 +1,4 @@
-//! A Douyin live-room connection made by Avatar3D itself, ported from
+//! A Douyin live-room connection made by Vorela itself, ported from
 //! douyinLive (MIT, jwwsjlm) with its web protocol profile:
 //!
 //! 1. Get an anonymous `ttwid` cookie, unless a Douyin cookie is saved

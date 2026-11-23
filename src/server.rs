@@ -122,8 +122,8 @@ pub fn router(app: App, port: u16) -> Router {
             "/health",
             get(|| async {
                 (
-                    [("x-avatar3d-version", env!("CARGO_PKG_VERSION"))],
-                    "avatar3d-live",
+                    [("x-vorela-version", env!("CARGO_PKG_VERSION"))],
+                    "vorela",
                 )
             }),
         )

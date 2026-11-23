@@ -1,4 +1,4 @@
-//! Wrappers over Avatar3D's `src/douyin/sign.rs`, compiled from that file.
+//! Wrappers over Vorela's `src/douyin/sign.rs`, compiled from that file.
 
 #![forbid(unsafe_code)]
 

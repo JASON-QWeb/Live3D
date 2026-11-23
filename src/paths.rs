@@ -69,7 +69,7 @@ pub fn song_titles_file_path(english: bool) -> Option<PathBuf> {
 }
 
 pub fn env_file_path() -> Result<PathBuf> {
-    if let Some(p) = env::var_os("AVATAR3D_ENV_FILE")
+    if let Some(p) = env::var_os("VORELA_ENV_FILE").or_else(|| env::var_os("AVATAR3D_ENV_FILE"))
         && !p.is_empty()
     {
         return Ok(p.into());

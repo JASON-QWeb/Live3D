@@ -3,7 +3,7 @@
 #import "FilePicker.h"
 
 typedef void (*QuitCallback)(const void *);
-static NSString *const InterfaceLanguageKey = @"Avatar3DInterfaceLanguage";
+static NSString *const InterfaceLanguageKey = @"VorelaInterfaceLanguage";
 
 @interface AvatarDesktop : NSObject <NSApplicationDelegate, NSWindowDelegate, WKUIDelegate, WKNavigationDelegate>
 @property(nonatomic, strong) NSURL *controlURL;
@@ -22,9 +22,9 @@ static NSMenu *submenu(NSMenu *bar, NSString *title) {
 
 static void installMenus(AvatarDesktop *desktop) {
     NSMenu *bar = [NSMenu new];
-    NSMenu *app = submenu(bar, @"Avatar3D Live");
-    [app addItemWithTitle:@"隐藏 Avatar3D Live" action:@selector(hide:) keyEquivalent:@"h"];
-    [app addItemWithTitle:@"退出 Avatar3D Live" action:@selector(terminate:) keyEquivalent:@"q"];
+    NSMenu *app = submenu(bar, @"Vorela");
+    [app addItemWithTitle:@"隐藏 Vorela" action:@selector(hide:) keyEquivalent:@"h"];
+    [app addItemWithTitle:@"退出 Vorela" action:@selector(terminate:) keyEquivalent:@"q"];
     NSMenu *edit = submenu(bar, @"编辑");
     [edit addItemWithTitle:@"撤销" action:@selector(undo:) keyEquivalent:@"z"];
     NSMenuItem *redo = [edit addItemWithTitle:@"重做" action:@selector(redo:) keyEquivalent:@"z"];
@@ -68,7 +68,7 @@ static void installMenus(AvatarDesktop *desktop) {
     config.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
     AvatarConfigureFilePicker(config);
     WKWebView *view = [[WKWebView alloc] initWithFrame:NSZeroRect configuration:config];
-    self.controlWindow = [self windowForView:view title:@"Avatar3D Live" size:NSMakeSize(1280, 840)];
+    self.controlWindow = [self windowForView:view title:@"Vorela" size:NSMakeSize(1280, 840)];
     [view loadRequest:[NSURLRequest requestWithURL:self.controlURL]];
     [self showControl:nil];
 }
@@ -109,7 +109,7 @@ static void installMenus(AvatarDesktop *desktop) {
     if (action.request.URL && ![self allowNavigation:action fromView:view]) return nil;
     [self.stageWindow close];
     WKWebView *stage = [[WKWebView alloc] initWithFrame:NSZeroRect configuration:config];
-    self.stageWindow = [self windowForView:stage title:@"Avatar3D Live · 独立舞台" size:NSMakeSize(720, 800)];
+    self.stageWindow = [self windowForView:stage title:@"Vorela · 独立舞台" size:NSMakeSize(720, 800)];
     [self.stageWindow makeKeyAndOrderFront:nil];
     return stage;
 }
@@ -134,7 +134,7 @@ static void installMenus(AvatarDesktop *desktop) {
 - (void)webView:(WKWebView *)view didFinishNavigation:(WKNavigation *)navigation {
     if (view != self.controlWindow.contentView || ![view.URL.path isEqualToString:@"/"]) return;
     // Startup alerts can appear before WebKit loads the console on the next launch.
-    [view evaluateJavaScript:@"localStorage.getItem('avatar3d.ui-lang') || 'zh'" completionHandler:^(id language, NSError *error) {
+    [view evaluateJavaScript:@"localStorage.getItem('vorela.ui-lang') || 'zh'" completionHandler:^(id language, NSError *error) {
         if (!error && ([language isEqual:@"zh"] || [language isEqual:@"en"])) {
             [NSUserDefaults.standardUserDefaults setObject:language forKey:InterfaceLanguageKey];
         }
@@ -154,7 +154,7 @@ static void installMenus(AvatarDesktop *desktop) {
 }
 @end
 
-void avatar3d_run_window(const char *url, const void *context, QuitCallback requestQuit) {
+void vorela_run_window(const char *url, const void *context, QuitCallback requestQuit) {
     @autoreleasepool {
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -168,7 +168,7 @@ void avatar3d_run_window(const char *url, const void *context, QuitCallback requ
     }
 }
 
-void avatar3d_service_ended(void) {
+void vorela_service_ended(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         AvatarDesktop *desktop = (AvatarDesktop *)NSApp.delegate;
         if (desktop.terminating) {
@@ -183,7 +183,7 @@ void avatar3d_service_ended(void) {
     });
 }
 
-void avatar3d_startup_error(const char *message, const char *englishMessage) {
+void vorela_startup_error(const char *message, const char *englishMessage) {
     @autoreleasepool {
         if (![NSBundle.mainBundle.bundleURL.pathExtension isEqualToString:@"app"]) return;
         [NSApplication sharedApplication];
@@ -192,7 +192,7 @@ void avatar3d_startup_error(const char *message, const char *englishMessage) {
         NSAlert *alert = [NSAlert new];
         NSString *language = [NSUserDefaults.standardUserDefaults stringForKey:InterfaceLanguageKey] ?: NSLocale.preferredLanguages.firstObject;
         BOOL english = [language hasPrefix:@"en"];
-        alert.messageText = english ? @"Couldn't start Avatar3D Live" : @"无法启动 Avatar3D Live";
+        alert.messageText = english ? @"Couldn't start Vorela" : @"无法启动 Vorela";
         alert.informativeText = [NSString stringWithUTF8String:english ? englishMessage : message];
         [alert runModal];
     }

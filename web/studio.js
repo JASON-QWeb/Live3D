@@ -177,6 +177,7 @@ function paint(v) {
   el("stop").hidden = !busy();
   el("stop").disabled = v.phase === "stopping";
   el("send").disabled = !live;
+  for (const button of quickActions) button.disabled = !live;
   el("interrupt").disabled = !live;
   for (const id of ["media", "reference", "reset", "removeRef"]) el(id).disabled = !live;
   el("choreo").disabled = !live || !configuration?.settings.actions.length;
@@ -342,7 +343,7 @@ action("ack", async () => {
   if (
     await confirmAction(
       t("确认云端已结束"),
-      t("仅在 Vidu 控制台确认此场次已经结束后使用。Avatar3D 会保留人工核对记录。"),
+      t("仅在 Vidu 控制台确认此场次已经结束后使用。Vorela 会保留人工核对记录。"),
       t("确认已结束"),
     )
   ) {
@@ -370,7 +371,7 @@ action("copyStage", async () => {
 });
 
 action("openStage", async () => {
-  const w = window.open("about:blank", "avatar3d_stage");
+  const w = window.open("about:blank", "vorela_stage");
   if (!w) throw Error(t("请允许浏览器打开舞台窗口"));
   w.opener = null;
   w.location.replace(await stageUrl());
@@ -385,10 +386,20 @@ el("modes").onclick = (e) => {
     .forEach((n) => n.setAttribute("aria-pressed", String(b === n)));
   el("line").placeholder = t({ say: "输入要说的话", reply: "输入给角色的问题", action: "输入角色要执行的动作" }[mode]);
   el("send").textContent = t(mode === "action" ? "发送动作" : "加入播出");
+  el("quickActions").hidden = mode !== "action";
   el("soundcheck").hidden = mode !== "say";
   el("audition").hidden = mode === "action";
   setButtonLabel(el("audition"), t(mode === "reply" ? "试听回复" : "本机试听"));
 };
+
+const quickActions = el("quickActions").querySelectorAll("button");
+for (const button of quickActions) {
+  action(button.id, async () => {
+    await api("/api/command", { kind: "action", text: button.dataset.action });
+    notify(t("已发送动作 · {0}", button.textContent));
+    await tick();
+  });
+}
 
 el("line").addEventListener("input", updateCharCount);
 
@@ -644,7 +655,7 @@ action("previewTrack", async () => {
 });
 
 action("removeTrack", async () => {
-  if (await confirmAction(t("从演唱曲库移除"), t("移除所选曲目在 Avatar3D 中的副本。"), t("移除"))) {
+  if (await confirmAction(t("从演唱曲库移除"), t("移除所选曲目在 Vorela 中的副本。"), t("移除"))) {
     await request("/api/tracks/" + el("tracks").value, { method: "DELETE" });
     await loadTracks();
   }
@@ -699,7 +710,7 @@ el("bgmTracks").onchange = async () => {
 };
 
 action("removeBgm", async () => {
-  if (await confirmAction(t("移除背景音乐"), t("移除所选背景音乐在 Avatar3D 中的副本。"), t("移除"))) {
+  if (await confirmAction(t("移除背景音乐"), t("移除所选背景音乐在 Vorela 中的副本。"), t("移除"))) {
     await request("/api/bgm/" + el("bgmTracks").value, { method: "DELETE" });
     await loadBgm();
     await tick();
@@ -778,9 +789,9 @@ action("clearEvents", async () => {
   notify(t("已清空直播动态"));
 });
 if (el("keepEventsOnStart")) {
-  el("keepEventsOnStart").checked = localStorage.getItem("avatar3d.keepEvents") === "1";
+  el("keepEventsOnStart").checked = localStorage.getItem("vorela.keepEvents") === "1";
   el("keepEventsOnStart").onchange = (e) => {
-    localStorage.setItem("avatar3d.keepEvents", e.target.checked ? "1" : "0");
+    localStorage.setItem("vorela.keepEvents", e.target.checked ? "1" : "0");
   };
 }
 
@@ -810,7 +821,7 @@ action("record", async () => {
 updateCharCount();
 
 if (!token) {
-  notify(t("请从 Avatar3D 应用打开控制台"));
+  notify(t("请从 Vorela 应用打开控制台"));
   el("phase").textContent = t("需要本机授权");
   el("lamp").className = "warn";
   el("start").disabled = true;

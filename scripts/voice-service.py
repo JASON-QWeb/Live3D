@@ -1,4 +1,4 @@
-"""Local MLX voice service for Avatar3D Live."""
+"""Local MLX voice service for Vorela."""
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -20,7 +20,7 @@ import uvicorn
 MING = "jorgepb96/Ming-3.0-tts-0.5B-4bit"
 ZONOS = "mlx-community/ZONOS3-Mini"
 VOICES = {MING: "灵小柔", ZONOS: "willow"}
-ACTIVE_LANG = "en" if os.environ.get("AVATAR3D_VOICE_LANG", "zh").strip().lower() == "en" else "zh"
+ACTIVE_LANG = "en" if os.environ.get("VORELA_VOICE_LANG", "zh").strip().lower() == "en" else "zh"
 ACTIVE_MODEL = ZONOS if ACTIVE_LANG == "en" else MING
 MING_FILES = (
     "config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json",
@@ -121,7 +121,7 @@ async def lifespan(app):
         yield
 
 
-app = FastAPI(title="Avatar3D Live Voice", lifespan=lifespan)
+app = FastAPI(title="Vorela Voice", lifespan=lifespan)
 
 
 @app.get("/v1/models")

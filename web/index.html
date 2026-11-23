@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#f5f5f7" />
-    <meta name="description" content="Avatar3D Live 本机角色互动直播控制台：实时监看画面、播音调度、弹幕互动与 OBS 场景集成。" />
-    <title>Avatar3D · 直播控制台</title>
+    <meta name="description" content="Vorela 本机角色互动直播控制台：实时监看画面、播音调度、弹幕互动与 OBS 场景集成。" />
+    <title>Vorela · 直播控制台</title>
     <link rel="icon" type="image/svg+xml" href="/mark.svg?v=2" />
     <link rel="stylesheet" href="/style.css" />
   </head>
@@ -15,8 +15,7 @@
         <div class="brand">
           <img src="/mark.svg" alt="" width="30" height="30" />
           <div class="brand-text">
-            <strong>Avatar3D</strong>
-            <span class="brand-en">LIVE</span>
+            <strong>Vorela</strong>
           </div>
         </div>
         <nav class="nav-track" aria-label="主导航">
@@ -147,6 +146,14 @@
                   <button data-mode="action" aria-pressed="false">人物动作</button>
                 </div>
                 <span class="char-hint mono" id="charCount">0 / 600</span>
+              </div>
+
+              <div class="row" id="quickActions" role="group" aria-label="常用动作" hidden>
+                <button type="button" id="restChin" data-action="用一只手轻托脸颊，头微微侧倾，看向镜头" disabled>托腮</button>
+                <button type="button" id="handHeart" data-action="双手在胸前比出爱心，微笑看向镜头" disabled>比心</button>
+                <button type="button" id="brushHair" data-action="抬起一只手，将脸侧的头发轻轻拨到耳后" disabled>撩头发</button>
+                <button type="button" id="wave" data-action="微笑看向镜头，抬起一只手左右挥动两次" disabled>挥手</button>
+                <button type="button" id="nod" data-action="看向镜头，轻轻点头两次" disabled>点头</button>
               </div>
 
               <label class="sr" for="line">播出内容</label>
@@ -549,7 +556,7 @@
               <details class="sub-disclosure" data-platform="douyin" hidden>
                 <summary>高级：改用外部 douyinLive</summary>
                 <div class="sub-fields">
-                  <p class="meta">默认由 Avatar3D 直接连接直播间。只有内置连接失效、要临时换回外部 douyinLive 时才填程序路径，清空即恢复内置连接。</p>
+                  <p class="meta">默认由 Vorela 直接连接直播间。只有内置连接失效、要临时换回外部 douyinLive 时才填程序路径，清空即恢复内置连接。</p>
                   <label>
                     <span>douyinLive 程序路径</span>
                     <input name="douyin_program" spellcheck="false" autocomplete="off" placeholder="例如 /Users/你的用户名/douyinLive/douyinLive" />
@@ -807,7 +814,7 @@
               <span class="meta-badge mono">WS v5</span>
             </div>
             <h2 id="h-obs">OBS 场景与开播</h2>
-            <p class="cell-desc">连接本机 OBS WebSocket，建立「Avatar3D · 数字人」浏览器源，填好推流码后直接在这里开播。</p>
+            <p class="cell-desc">连接本机 OBS WebSocket，建立「Vorela · 数字人」浏览器源，填好推流码后直接在这里开播。</p>
 
             <div class="fields">
               <div class="pair">
@@ -822,7 +829,7 @@
               </div>
               <div class="row wrap-row">
                 <button id="openObs" type="button">打开 OBS</button>
-                <button id="setupObs" type="button">建立 Avatar3D 场景</button>
+                <button id="setupObs" type="button">建立 Vorela 场景</button>
                 <span class="meta" id="obsStatus"></span>
               </div>
               <p class="meta obs-missing" id="obsMissing" hidden>
@@ -868,7 +875,7 @@
             </svg>
             <span id="dataPath" class="mono"></span>
           </div>
-          <button id="quit" class="btn-quit">退出 Avatar3D</button>
+          <button id="quit" class="btn-quit">退出 Vorela</button>
         </div>
       </section>
     </main>

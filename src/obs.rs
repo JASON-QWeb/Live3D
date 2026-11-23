@@ -9,8 +9,8 @@ use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 use uuid::Uuid;
 
-const SCENE: &str = "Avatar3D · 数字人";
-const SOURCE: &str = "Avatar3D · 舞台输出";
+const SCENE: &str = "Vorela · 数字人";
+const SOURCE: &str = "Vorela · 舞台输出";
 const BUNDLE: &str = "com.obsproject.obs-studio";
 
 /// Whether OBS Studio is in an Applications folder or known to Spotlight.

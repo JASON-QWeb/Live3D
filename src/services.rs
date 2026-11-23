@@ -58,7 +58,7 @@ impl ModelService {
         }
     }
     fn dir(self, app: &App) -> PathBuf {
-        std::env::var_os(format!("AVATAR3D_{}_DIR", self.name().to_uppercase()))
+        std::env::var_os(format!("VORELA_{}_DIR", self.name().to_uppercase()))
             .map(PathBuf::from)
             .unwrap_or_else(|| app.dir.join(self.name()))
     }
@@ -113,7 +113,7 @@ impl ModelService {
         };
         match self {
             Self::Voice => {
-                v["info"]["title"] == "Avatar3D Live Voice"
+                v["info"]["title"] == "Vorela Voice"
                     && v["paths"].get("/v1/audio/speech").is_some()
             }
             Self::Chat => v["data"].is_array(),
@@ -177,18 +177,18 @@ impl ModelService {
         cmd.args([
             "-c",
             include_str!("../scripts/start-model.sh"),
-            "avatar3d",
+            "vorela",
             self.name(),
         ])
         .current_dir(&dir)
-        .env("AVATAR3D_MODEL_DIR", &dir)
-        .env("AVATAR3D_MODEL_CACHE", app.dir.join("models"))
+        .env("VORELA_MODEL_DIR", &dir)
+        .env("VORELA_MODEL_CACHE", app.dir.join("models"))
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log)
         .kill_on_drop(true);
         if matches!(self, Self::Voice) {
-            cmd.env("AVATAR3D_VOICE_LANG", &desired_lang);
+            cmd.env("VORELA_VOICE_LANG", &desired_lang);
         }
         let c = cmd.spawn().context("无法启动本机模型服务")?;
         *process = Some(c);

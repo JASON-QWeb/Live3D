@@ -1,10 +1,10 @@
-sessionStorage.removeItem("avatar3d.admin");
+sessionStorage.removeItem("vorela.admin");
 const supplied = location.hash.slice(1);
 if (supplied) {
-  sessionStorage.setItem("avatar3d.stage", supplied);
+  sessionStorage.setItem("vorela.stage", supplied);
   history.replaceState(null, "", location.pathname);
 }
-let token = sessionStorage.getItem("avatar3d.stage") || "";
+let token = sessionStorage.getItem("vorela.stage") || "";
 const client = crypto.randomUUID();
 const picture = document.getElementById("picture"),
   caption = document.getElementById("sub"),
@@ -697,11 +697,11 @@ async function poll() {
       stopBgm();
       if (rtc || desired) await leave();
       if (occupiedNotice) occupiedNotice.hidden = false;
-      document.title = "Avatar3D · 舞台已被占用";
+      document.title = "Vorela · 舞台已被占用";
       return;
     }
     if (occupiedNotice) occupiedNotice.hidden = true;
-    document.title = "Avatar3D · 舞台输出";
+    document.title = "Vorela · 舞台输出";
     if (v.bgm) applyBgmState(v.bgm);
     if (!v.song && (songPlaying || songPlaybackId)) {
       stopSong();
@@ -767,7 +767,7 @@ window.addEventListener("hashchange", () => {
   const next = location.hash.slice(1);
   if (!next) return;
   token = next;
-  sessionStorage.setItem("avatar3d.stage", next);
+  sessionStorage.setItem("vorela.stage", next);
   history.replaceState(null, "", location.pathname);
   startPolling();
 });

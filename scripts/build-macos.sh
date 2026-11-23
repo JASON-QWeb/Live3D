@@ -11,31 +11,31 @@ mkdir -p "${1:-$project/dist}"
 dest="$(cd "${1:-$project/dist}" && pwd)"
 cd "$project"
 export MACOSX_DEPLOYMENT_TARGET=14.0
-stage="$(mktemp -d "$dest/.avatar3d-build.XXXXXX")"
-app="$stage/Avatar3D Live.app"
-output="$dest/Avatar3D Live.app"
+stage="$(mktemp -d "$dest/.vorela-build.XXXXXX")"
+app="$stage/Vorela.app"
+output="$dest/Vorela.app"
 trap 'if [[ ! -e "$stage/previous.app" ]]; then rm -rf "$stage"; fi' EXIT
-identity="${AVATAR3D_SIGN_IDENTITY:--}"
+identity="${VORELA_SIGN_IDENTITY:--}"
 sign=(--force --sign "$identity")
 if [[ "$identity" != "-" ]]; then sign+=(--options runtime); fi
-executable="$(cargo build --locked --release --bin avatar3d-live --message-format=json-render-diagnostics | python3 -c '
+executable="$(cargo build --locked --release --bin vorela --message-format=json-render-diagnostics | python3 -c '
 import json, sys
 executable = None
 for message in map(json.loads, sys.stdin):
-    if (message["reason"] == "compiler-artifact" and message["target"]["name"] == "avatar3d-live"
+    if (message["reason"] == "compiler-artifact" and message["target"]["name"] == "vorela"
             and message["executable"]):
         executable = message["executable"]
 if executable is None:
-    sys.exit("Cargo 未生成 avatar3d-live 可执行文件")
+    sys.exit("Cargo 未生成 vorela 可执行文件")
 print(executable)
 ')"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 install -m 644 packaging/Info.plist "$app/Contents/Info.plist"
 version="$("$executable" --version)"
-plutil -insert CFBundleShortVersionString -string "${version#Avatar3D Live }" "$app/Contents/Info.plist"
+plutil -insert CFBundleShortVersionString -string "${version#Vorela }" "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist"
-install -m 755 "$executable" "$app/Contents/MacOS/avatar3d-live"
-install -m 644 packaging/Avatar3D.icns "$app/Contents/Resources/Avatar3D.icns"
+install -m 755 "$executable" "$app/Contents/MacOS/vorela"
+install -m 644 packaging/Vorela.icns "$app/Contents/Resources/Vorela.icns"
 install -m 644 LICENSE "$app/Contents/Resources/LICENSE"
 install -m 644 NOTICE.md "$app/Contents/Resources/NOTICE.md"
 install -m 644 README.md "$app/Contents/Resources/README.md"
@@ -47,12 +47,12 @@ for asset in avatars/cn/xiaorou_knowledge_base.txt avatars/en/knowledge_base.txt
   fi
 done
 python3 scripts/notices.py "$app/Contents/Resources/ThirdParty.txt"
-codesign "${sign[@]}" --identifier studio.avatar3d.control "$app"
+codesign "${sign[@]}" --identifier studio.vorela.control "$app"
 codesign --verify --deep --strict "$app"
-if "$zip"; then ditto -c -k --norsrc --keepParent "$app" "$stage/Avatar3D Live.zip"; fi
+if "$zip"; then ditto -c -k --norsrc --keepParent "$app" "$stage/Vorela.zip"; fi
 if [[ -e "$output" ]]; then
   existing_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$output/Contents/Info.plist")"
-  [[ "$existing_id" == "studio.avatar3d.control" ]] || { echo "目标位置有其他应用" >&2; exit 1; }
+  [[ "$existing_id" == "studio.vorela.control" ]] || { echo "目标位置有其他应用" >&2; exit 1; }
   mv "$output" "$stage/previous.app"
 fi
 if ! mv "$app" "$output"; then
@@ -62,6 +62,6 @@ fi
 rm -rf "$stage/previous.app"
 echo "$output"
 if "$zip"; then
-  mv -f "$stage/Avatar3D Live.zip" "$dest/Avatar3D Live.zip"
-  echo "$dest/Avatar3D Live.zip"
+  mv -f "$stage/Vorela.zip" "$dest/Vorela.zip"
+  echo "$dest/Vorela.zip"
 fi

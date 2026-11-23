@@ -157,16 +157,6 @@ textarea {
   color: var(--ink);
 }
 
-.brand-en {
-  font: 600 10px/1 var(--mono);
-  letter-spacing: 0.08em;
-  color: var(--body);
-  background: var(--surface-well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  padding: 3px 7px;
-}
-
 .nav-track {
   display: inline-flex;
   align-items: center;
@@ -2085,10 +2075,6 @@ dialog p {
 
   .brand strong {
     font-size: 15px;
-  }
-
-  .brand-en {
-    display: none;
   }
 
   /* Room for the language switch: the logo stays, and Settings shows the stream language. */

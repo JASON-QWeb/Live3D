@@ -9,17 +9,17 @@ const keyNames = {
 };
 const incoming = location.hash.slice(1);
 if (incoming) {
-  sessionStorage.setItem("avatar3d.admin", incoming);
+  sessionStorage.setItem("vorela.admin", incoming);
   history.replaceState(null, "", location.pathname);
 }
-export const token = sessionStorage.getItem("avatar3d.admin") || "";
+export const token = sessionStorage.getItem("vorela.admin") || "";
 
 export async function request(path, options = {}) {
   const headers = new Headers(options.headers);
   headers.set("Authorization", "Bearer " + token);
   const response = await fetch(path, { ...options, headers, cache: "no-store" });
   if (!response.ok) {
-    if (response.status === 401) throw new Error(t("请从 Avatar3D 应用打开控制台"));
+    if (response.status === 401) throw new Error(t("请从 Vorela 应用打开控制台"));
     const body = await response.json().catch(() => ({}));
     // raw keeps the backend's Chinese text for code that matches on it.
     const error = new Error(body.error ? tr(body.error) : t("请求失败（HTTP {0}）", response.status));
@@ -380,7 +380,7 @@ async function toggleLive() {
     const where = now.custom ? now.server : now.service ? t("OBS 内置服务「{0}」", now.service) : t("直播平台");
     const notes = [
       t("OBS 会把{0}推到 {1}，观众马上就能看到。", now.scene ? t("场景「{0}」", now.scene) : t("当前画面"), where),
-      !now.avatar_scene && t("当前播出的不是「Avatar3D · 数字人」场景。"),
+      !now.avatar_scene && t("当前播出的不是「Vorela · 数字人」场景。"),
       phase !== "live" && t("数字人还没有连线，观众会先看到空白舞台。"),
     ];
     if (!(await confirmAction(t("开始直播"), notes.filter(Boolean).join("").trim(), t("开播")))) return;
@@ -472,7 +472,7 @@ export function setupConfig(updated) {
     }
   };
   action("deleteImage", async () => {
-    if (!(await confirmAction(t("移除角色图"), t("只移除 Avatar3D 保存的本机副本。"), t("移除")))) return;
+    if (!(await confirmAction(t("移除角色图"), t("只移除 Vorela 保存的本机副本。"), t("移除")))) return;
     await request("/api/avatar", { method: "DELETE" });
     configuration.avatar = false;
     el("deleteImage").hidden = true;
@@ -505,7 +505,7 @@ export function setupConfig(updated) {
     }
     el("obsMissing").hidden = true;
     el("obsStatus").textContent = t("已打开 OBS");
-    notify(t("已打开 OBS。首次使用请在 OBS「工具 → WebSocket 服务器设置」启用服务器，再点「建立 Avatar3D 场景」"));
+    notify(t("已打开 OBS。首次使用请在 OBS「工具 → WebSocket 服务器设置」启用服务器，再点「建立 Vorela 场景」"));
   });
   action("setupObs", async () => {
     const target = obsTarget();
@@ -540,9 +540,9 @@ export function setupConfig(updated) {
     notify(t("已复制弹幕入口和专用令牌"));
   });
   action("quit", async () => {
-    if (await confirmAction(t("退出 Avatar3D"), t("正在进行的连线会先请求挂断并与云端核对。"), t("退出"))) {
+    if (await confirmAction(t("退出 Vorela"), t("正在进行的连线会先请求挂断并与云端核对。"), t("退出"))) {
       await api("/api/quit", {});
-      notify(t("正在退出 Avatar3D"));
+      notify(t("正在退出 Vorela"));
     }
   });
 }

@@ -63,7 +63,7 @@ pub fn signal(app: &App, t: u8, p: Value) -> Result<()> {
 }
 pub async fn start(app: &App, keep_events: bool) -> Result<()> {
     let _g = app.gate.lock().await;
-    ensure!(!app.quit.is_cancelled(), "Avatar3D 正在退出");
+    ensure!(!app.quit.is_cancelled(), "Vorela 正在退出");
     ensure!(lock(&app.run).is_none(), "已有会话正在运行");
     ensure!(
         !app.dir.join("open-session.json").exists(),

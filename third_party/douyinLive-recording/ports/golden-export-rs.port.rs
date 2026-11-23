@@ -1,4 +1,4 @@
-//! Wrappers over Avatar3D's `src/douyin/params.rs` and `page.rs`, compiled from those files.
+//! Wrappers over Vorela's `src/douyin/params.rs` and `page.rs`, compiled from those files.
 
 #![forbid(unsafe_code)]
 

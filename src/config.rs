@@ -284,8 +284,8 @@ impl Default for Settings {
                 "Sing naturally with gentle, expressive demeanor, swaying lightly with the melody"
                     .into(),
             post_sing_action: "唱完歌微笑看向镜头，神态温柔放松".into(),
-            post_sing_action_en: "Finish singing and smile warmly at the camera, relaxed and natural"
-                .into(),
+            post_sing_action_en:
+                "Finish singing and smile warmly at the camera, relaxed and natural".into(),
             utterance_gap: 3,
             song_audio_mode: "stage".into(),
             song_sync_offset_ms: 800,
@@ -517,13 +517,18 @@ impl Settings {
     }
 }
 pub fn data_dir() -> Result<PathBuf> {
-    if let Some(p) = env::var_os("AVATAR3D_DATA_DIR") {
+    if let Some(p) = env::var_os("VORELA_DATA_DIR").or_else(|| env::var_os("AVATAR3D_DATA_DIR")) {
         return Ok(p.into());
     }
-    Ok(
-        PathBuf::from(env::var_os("HOME").context("无法定位用户目录")?)
-            .join("Library/Application Support/Avatar3D Live"),
-    )
+    let support = PathBuf::from(env::var_os("HOME").context("无法定位用户目录")?)
+        .join("Library/Application Support");
+    let current = support.join("Vorela");
+    let legacy = support.join("Avatar3D Live");
+    // Existing settings and model environments can contain absolute paths.
+    if !current.exists() && legacy.is_dir() {
+        return Ok(legacy);
+    }
+    Ok(current)
 }
 pub fn prepare_dir(path: &Path) -> Result<()> {
     fs::create_dir_all(path)?;
@@ -585,11 +590,25 @@ impl Tokens {
 }
 fn key_env_vars(name: &str) -> &'static [&'static str] {
     match name {
-        "vidu" => &["AVATAR3D_VIDU_KEY", "VIDU_API_KEY", "VIDU_KEY"],
-        "llm" => &["AVATAR3D_LLM_KEY", "LLM_API_KEY", "OPENAI_API_KEY"],
-        "youtube" => &["AVATAR3D_YOUTUBE_KEY", "YOUTUBE_API_KEY"],
-        "obs" => &["AVATAR3D_OBS_PASSWORD"],
-        "douyin" => &["AVATAR3D_DOUYIN_COOKIE"],
+        "vidu" => &[
+            "VORELA_VIDU_KEY",
+            "AVATAR3D_VIDU_KEY",
+            "VIDU_API_KEY",
+            "VIDU_KEY",
+        ],
+        "llm" => &[
+            "VORELA_LLM_KEY",
+            "AVATAR3D_LLM_KEY",
+            "LLM_API_KEY",
+            "OPENAI_API_KEY",
+        ],
+        "youtube" => &[
+            "VORELA_YOUTUBE_KEY",
+            "AVATAR3D_YOUTUBE_KEY",
+            "YOUTUBE_API_KEY",
+        ],
+        "obs" => &["VORELA_OBS_PASSWORD", "AVATAR3D_OBS_PASSWORD"],
+        "douyin" => &["VORELA_DOUYIN_COOKIE", "AVATAR3D_DOUYIN_COOKIE"],
         _ => &[],
     }
 }
@@ -855,7 +874,7 @@ mod tests {
         let content = fs::read_to_string(&path).unwrap();
         assert!(content.contains("# comment"));
         assert!(content.contains("OTHER=1"));
-        assert!(content.contains("AVATAR3D_VIDU_KEY=vidu-next"));
+        assert!(content.contains("VORELA_VIDU_KEY=vidu-next"));
         assert!(!content.contains("VIDU_API_KEY"));
 
         write_env_key(&path, "vidu", "").unwrap();

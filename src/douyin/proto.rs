@@ -1,4 +1,4 @@
-//! The Douyin webcast protobuf messages Avatar3D reads. Field numbers come
+//! The Douyin webcast protobuf messages Vorela reads. Field numbers come
 //! from douyinlive-proto v0.1.3 (`new_douyin.proto`); fields not listed are
 //! skipped when decoding.
 

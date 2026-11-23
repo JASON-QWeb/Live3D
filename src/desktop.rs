@@ -6,13 +6,13 @@ use std::{
 use tokio_util::sync::CancellationToken;
 
 unsafe extern "C" {
-    fn avatar3d_run_window(
+    fn vorela_run_window(
         url: *const c_char,
         context: *const c_void,
         request_quit: extern "C" fn(*const c_void),
     );
-    fn avatar3d_service_ended();
-    fn avatar3d_startup_error(message: *const c_char, english: *const c_char);
+    fn vorela_service_ended();
+    fn vorela_startup_error(message: *const c_char, english: *const c_char);
 }
 
 extern "C" fn request_quit(context: *const c_void) {
@@ -24,13 +24,13 @@ pub fn show(port: u16, admin: &str, quit: Option<&CancellationToken>) -> Result<
     let url = CString::new(format!("http://127.0.0.1:{port}/#{admin}"))?;
     let context = quit.map_or(ptr::null(), ptr::from_ref).cast();
     // The Cocoa event loop stays on the main thread. Both borrows outlive this call.
-    unsafe { avatar3d_run_window(url.as_ptr(), context, request_quit) };
+    unsafe { vorela_run_window(url.as_ptr(), context, request_quit) };
     Ok(())
 }
 
 pub fn service_ended() {
     // The native side dispatches this notification onto the main queue.
-    unsafe { avatar3d_service_ended() };
+    unsafe { vorela_service_ended() };
 }
 
 fn english_startup_message(error: &anyhow::Error) -> String {
@@ -50,7 +50,7 @@ pub fn startup_error(error: &anyhow::Error) {
     let english = english_startup_message(error);
     if let (Ok(message), Ok(english)) = (CString::new(format!("{error:#}")), CString::new(english))
     {
-        unsafe { avatar3d_startup_error(message.as_ptr(), english.as_ptr()) };
+        unsafe { vorela_startup_error(message.as_ptr(), english.as_ptr()) };
     }
 }
 
@@ -61,11 +61,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let missing = std::fs::File::open(dir.path().join("studio.lock")).unwrap_err();
         let os_message = missing.to_string();
-        let error = anyhow::Error::new(missing).context("该端口上的 Avatar3D 使用其他数据目录");
+        let error = anyhow::Error::new(missing).context("该端口上的 Vorela 使用其他数据目录");
         assert_eq!(
             super::english_startup_message(&error),
             format!(
-                "The Avatar3D instance on this port is using a different data folder: {os_message}"
+                "The Vorela instance on this port is using a different data folder: {os_message}"
             )
         );
     }

@@ -1,4 +1,4 @@
-"""Model downloads that report progress to the Avatar3D Live console."""
+"""Model downloads that report progress to the Vorela console."""
 
 import json
 import os
@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 def report(stage, **fields):
     """Replace the progress file the console polls. Progress is best effort."""
-    path = os.environ.get("AVATAR3D_PROGRESS")
+    path = os.environ.get("VORELA_PROGRESS")
     if not path:
         return
     try:

@@ -1,9 +1,9 @@
 //! Douyin live comments.
 //!
-//! By default Avatar3D connects to the live room itself (`live.rs`), with the
+//! By default Vorela connects to the live room itself (`live.rs`), with the
 //! signing and parsing ported from douyinLive (<https://github.com/jwwsjlm/douyinLive>,
 //! MIT). When a douyinLive program path is set, it starts that program instead
-//! and reads its JSON on `ws://127.0.0.1:<port>/ws/<room>`. Either way Avatar3D
+//! and reads its JSON on `ws://127.0.0.1:<port>/ws/<room>`. Either way Vorela
 //! stays connected whenever a room is set, independent of the Vidu session:
 //! comments appear in the event log before going live and are handled like
 //! any other audience event once live.
@@ -41,7 +41,7 @@ const COMBO_IDLE: Duration = Duration::from_secs(3);
 struct Target {
     room: String,
     port: u16,
-    /// douyinLive to start; empty means Avatar3D connects by itself.
+    /// douyinLive to start; empty means Vorela connects by itself.
     program: String,
     /// The saved Douyin cookie, used by the built-in connection.
     cookie: Option<String>,
